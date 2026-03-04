@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f0e8;
+  --surface: #fffdf8;
+  --surface-muted: #ebf1e5;
+  --border: #d7dece;
+  --foreground: #263126;
+  --foreground-soft: #5b6759;
+  --primary: #446e4a;
+  --primary-strong: #2f5335;
+  --primary-soft: #deebdd;
+  --accent: #a9c498;
+  --danger: #aa6a58;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-foreground-soft: var(--foreground-soft);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-manrope);
+  --font-serif: var(--font-literata);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgba(121, 162, 114, 0.18), transparent 40%),
+    linear-gradient(180deg, #f8f4ea 0%, #f4f0e8 46%, #ebf1e5 100%);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+a,
+button,
+input,
+select,
+textarea,
+summary {
+  outline-color: var(--primary);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(47, 107, 62, 0.22);
+}
+
+.prose {
+  color: var(--foreground);
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+
+.prose p,
+.prose li {
+  color: var(--foreground-soft);
+  line-height: 1.75;
+}
+
+.prose ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+
+.prose a {
+  color: var(--primary-strong);
+  text-decoration: underline;
+}
+
+.shadow-soft {
+  box-shadow: 0 18px 48px rgba(30, 54, 34, 0.08);
+}

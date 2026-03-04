@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3001
+      AUTH_SECRET: test-secret
+      USE_MEMORY_DB: "true"
+      ENABLE_TEST_AUTH: "true"
+      ENABLE_ALT_HOME_HERO: "false"
+      ENABLE_ALT_ONBOARDING_RESULTS: "false"
+      ENABLE_MONTH1_REPORT_EXPORTS: "false"
+      STRIPE_PRO_PRICE_ID: price_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
