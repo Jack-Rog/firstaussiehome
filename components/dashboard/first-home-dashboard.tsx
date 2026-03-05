@@ -67,6 +67,26 @@ const HOME_STATE_OPTIONS: Array<{
   { value: "nt", label: "NT" },
 ];
 
+const SCHEME_BLOG_SLUG_BY_ID: Record<string, string> = {
+  "stamp-duty": "nsw-fhbas-concept",
+  guarantee: "home-guarantee-concept",
+  "help-to-buy": "shared-equity-concept",
+  fhss: "fhss-concept",
+};
+
+const SETUP_COST_HINTS: Record<string, string> = {
+  "upfront-professional":
+    "Legal support for contract review, settlement preparation, and final transfer process.",
+  "upfront-disbursements":
+    "Third-party search and lodgement costs often charged during conveyancing.",
+  "upfront-stamping":
+    "Document stamping/processing costs linked to settlement paperwork.",
+  "upfront-registration":
+    "Land registry transfer and mortgage registration charges.",
+  "upfront-pexa":
+    "Electronic settlement platform fee for processing settlement.",
+};
+
 function resolveHomeState(partial?: Partial<HomeownerPathwayInput>) {
   if (partial?.homeState) {
     return partial.homeState;
@@ -167,36 +187,36 @@ function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>)
 
 function compactBooleanClass(active: boolean) {
   return active
-    ? "border-[#2f6a35]/30 bg-[#dff2e1] text-[#1f4d25]"
-    : "border-[#b85b5b]/25 bg-[#f9e3e3] text-[#8a2f2f]";
+    ? "border-primary/30 bg-primary-soft text-primary-strong"
+    : "border-danger/25 bg-[#f9ecef] text-[#922b41]";
 }
 
 function scenarioButtonClass(scenario: PathwayScenarioOption, selected: boolean) {
   if (!scenario.available) {
-    return "cursor-not-allowed border-border bg-[#ebe7de] text-foreground-soft opacity-80";
+    return "cursor-not-allowed border-border bg-[#efede8] text-foreground-soft opacity-80";
   }
 
   if (selected) {
-    return "border-primary bg-primary text-white shadow-soft";
+    return "border-primary bg-primary text-white shadow-[0_10px_24px_rgba(74,124,89,0.32)]";
   }
 
-  return "border-border bg-white text-foreground";
+  return "border-border bg-white text-foreground hover:border-primary/35";
 }
 
 function schemePillClass(state: "active" | "available" | "inactive" | "watch") {
   if (state === "active") {
-    return "border-[#2f6a35]/30 bg-[#dff2e1] text-[#1f4d25]";
+    return "border-primary/30 bg-primary-soft text-primary-strong";
   }
 
   if (state === "available") {
-    return "border-[#5e8f63]/20 bg-[#edf7ee] text-[#2d5a31]";
+    return "border-accent/30 bg-accent-soft text-[#345443]";
   }
 
   if (state === "watch") {
-    return "border-[#d2bda2] bg-[#fbf4e8] text-[#7b5a33]";
+    return "border-[#d2bda2] bg-[#fbf4e8] text-[#6b5230]";
   }
 
-  return "border-[#b85b5b]/20 bg-[#f7eded] text-[#8a2f2f]";
+  return "border-danger/25 bg-[#f8edf0] text-[#8a2f2f]";
 }
 
 function amortizedMonthlyRepayment(principal: number, annualRate: number, termYears: number) {
@@ -212,6 +232,22 @@ function amortizedMonthlyRepayment(principal: number, annualRate: number, termYe
   }
 
   return (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -periods));
+}
+
+function frequencyLabel(frequency: Frequency) {
+  if (frequency === "annually") {
+    return "annual";
+  }
+
+  return frequency;
+}
+
+function signedCurrency(value: number, sign: "+" | "-" | "=") {
+  if (sign === "=") {
+    return formatCurrency(value);
+  }
+
+  return `${sign}${formatCurrency(value)}`;
 }
 
 function updateInputFromDisplay(
@@ -276,7 +312,7 @@ function SectionCard({
   children: ReactNode;
 }) {
   return (
-    <Card className="bg-white/92 p-4 md:p-5">
+    <Card className="animate-fade-up bg-white p-5 md:p-6">
       <button
         type="button"
         className="flex w-full items-start justify-between gap-4 text-left"
@@ -286,7 +322,7 @@ function SectionCard({
           <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
           {subtitle ? <p className="text-sm text-foreground-soft">{subtitle}</p> : null}
         </div>
-        <span className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface text-foreground">
+        <span className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-muted text-foreground">
           {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </span>
       </button>
@@ -317,6 +353,7 @@ export function FirstHomeDashboard({
     next: true,
   });
   const [schemePanelOpen, setSchemePanelOpen] = useState(true);
+  const [schemeDetailOpen, setSchemeDetailOpen] = useState<Partial<Record<string, boolean>>>({});
   const [setupCostsOpen, setSetupCostsOpen] = useState(false);
 
   const withSchemes = useMemo(
@@ -387,6 +424,8 @@ export function FirstHomeDashboard({
   const currentCash = withSchemes.cashOutlayOverlay.totalBuyerCashOutlay;
   const baselineCash = withoutSchemes.cashOutlayOverlay.totalBuyerCashOutlay;
   const cashDifference = Math.max(baselineCash - currentCash, 0);
+  const savingsGap = Math.max(currentCash - input.currentSavings, 0);
+  const savingsSurplus = Math.max(input.currentSavings - currentCash, 0);
   const currentLvr =
     input.targetPropertyPrice > 0 && currentScenario
       ? (currentScenario.mortgageAmount / input.targetPropertyPrice) * 100
@@ -396,21 +435,55 @@ export function FirstHomeDashboard({
   const marketMonthlyRepayment = currentScenario
     ? amortizedMonthlyRepayment(currentScenario.mortgageAmount, displayedRate, 30)
     : 0;
+  const marketRepaymentAtExpenseFrequency = fromMonthlyAmount(marketMonthlyRepayment, expenseFrequency);
   const timeToSaveYears = currentScenario ? (currentScenario.timeToSaveMonths / 12).toFixed(1) : "0.0";
   const currentRows = [
-    { label: "Home price", currentValue: withSchemes.cashOutlayOverlay.purchasePrice, baselineValue: withoutSchemes.cashOutlayOverlay.purchasePrice },
-    { label: "Bank loan", currentValue: withSchemes.cashOutlayOverlay.financedAmount, baselineValue: withoutSchemes.cashOutlayOverlay.financedAmount },
-    { label: "Deposit", currentValue: withSchemes.cashOutlayOverlay.depositAmount, baselineValue: withoutSchemes.cashOutlayOverlay.depositAmount },
-    { label: "Transfer duty", currentValue: withSchemes.cashOutlayOverlay.stampDuty, baselineValue: withoutSchemes.cashOutlayOverlay.stampDuty },
-    { label: "Grouped setup costs", currentValue: withSchemes.cashOutlayOverlay.otherUpfrontCosts, baselineValue: withoutSchemes.cashOutlayOverlay.otherUpfrontCosts },
+    {
+      label: "Home price",
+      sign: "+" as const,
+      currentValue: withSchemes.cashOutlayOverlay.purchasePrice,
+      baselineValue: withoutSchemes.cashOutlayOverlay.purchasePrice,
+    },
+    {
+      label: "Bank funding",
+      sign: "-" as const,
+      currentValue: withSchemes.cashOutlayOverlay.financedAmount,
+      baselineValue: withoutSchemes.cashOutlayOverlay.financedAmount,
+    },
+    {
+      label: "Transfer duty",
+      sign: "+" as const,
+      currentValue: withSchemes.cashOutlayOverlay.stampDuty,
+      baselineValue: withoutSchemes.cashOutlayOverlay.stampDuty,
+    },
+    {
+      label: "Grouped setup costs",
+      sign: "+" as const,
+      currentValue: withSchemes.cashOutlayOverlay.otherUpfrontCosts,
+      baselineValue: withoutSchemes.cashOutlayOverlay.otherUpfrontCosts,
+    },
   ];
-  const setupCostDetails =
-    upfrontCostsPathway?.metrics.filter((metric) => metric.id !== "upfront-total") ?? [];
+  const setupCostDetails = (upfrontCostsPathway?.metrics.filter((metric) => metric.id !== "upfront-total") ?? []).map(
+    (metric) => ({
+      ...metric,
+      label:
+        metric.id === "upfront-professional"
+          ? "Solicitor/Conveyancer fees"
+          : metric.label,
+    }),
+  );
 
   function toggleSection(section: DashboardSection) {
     setOpenSections((current) => ({
       ...current,
       [section]: !current[section],
+    }));
+  }
+
+  function toggleSchemeDetail(schemeId: string) {
+    setSchemeDetailOpen((current) => ({
+      ...current,
+      [schemeId]: !current[schemeId],
     }));
   }
 
@@ -508,22 +581,41 @@ export function FirstHomeDashboard({
   ];
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="space-y-6 pb-20 xl:pb-0">
-      <section className="rounded-[2rem] border border-border bg-[linear-gradient(180deg,#f7f4ea,#eef5e8)] p-6 shadow-soft">
+      <section className="animate-fade-up rounded-[1.4rem] border border-border bg-[radial-gradient(circle_at_90%_16%,rgba(122,156,137,0.22),transparent_38%),linear-gradient(180deg,#ffffff,#f3f6f1)] p-6 shadow-[0_16px_38px_rgba(33,47,37,0.11)]">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Welcome back, {accountName}</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">Your first-home dashboard</h1>
         <p className="mt-2 text-sm text-foreground-soft">Each change below updates the out-of-pocket cash straight away.</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {withSchemes.comparisonRibbon.map((item) => (
-            <span
-              key={item.id}
-              className="inline-flex rounded-full border border-border bg-white/85 px-3 py-1.5 text-xs font-semibold text-foreground"
-            >
-              {item.label}: {item.value}
-            </span>
-          ))}
+          <span className="inline-flex rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground">
+            State: {input.homeState?.toUpperCase()}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground">
+            Area: {input.buyingArea === "state-capital" ? "State capital" : "Regional / non-capital"}
+          </span>
         </div>
+      </section>
+
+      <section className="animate-fade-up sticky top-[5.4rem] z-30 rounded-[1.25rem] border border-border bg-[linear-gradient(135deg,#edf5ef,#f5f2e9)] p-5 shadow-[0_14px_30px_rgba(33,47,37,0.14)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Cost of your First Home</p>
+            <p className="mt-1 text-sm text-foreground-soft">Funds required from you</p>
+            <p data-testid="current-cash-outlay" className="mt-2 text-4xl font-semibold tracking-tight text-foreground">
+              {formatCurrency(currentCash)}
+            </p>
+          </div>
+          <div className="rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary-strong">
+            {formatCurrency(cashDifference)} less cash with the current setup
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-foreground-soft">
+          Savings line: you currently have {formatCurrency(input.currentSavings)}.{" "}
+          {savingsGap > 0
+            ? `${formatCurrency(savingsGap)} still required to reach this cash outlay.`
+            : `${formatCurrency(savingsSurplus)} above this cash outlay.`}
+        </p>
       </section>
 
       <SectionCard
@@ -541,16 +633,16 @@ export function FirstHomeDashboard({
                 <button
                   key={control.label}
                   type="button"
-                  className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left ${compactBooleanClass(
+                  className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-colors ${compactBooleanClass(
                     control.active,
                   )}`}
                   onClick={control.onToggle}
                 >
-                  <span className="flex items-center gap-2 text-sm font-semibold">
-                    <Icon className="h-4 w-4" />
+                  <span className="flex items-center gap-1.5 text-xs font-semibold">
+                    <Icon className="h-3.5 w-3.5" />
                     {control.label}
                   </span>
-                  {control.active ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                  {control.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
                 </button>
               );
             })}
@@ -564,8 +656,8 @@ export function FirstHomeDashboard({
                   <button
                     key={option.value}
                     type="button"
-                    className={`rounded-xl px-2 py-2 text-xs font-semibold ${
-                      input.homeState === option.value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                    className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                      input.homeState === option.value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
                     }`}
                     onClick={() =>
                       setInput((current) => ({
@@ -591,8 +683,8 @@ export function FirstHomeDashboard({
                   <button
                     key={value}
                     type="button"
-                    className={`rounded-xl px-3 py-2 text-xs font-semibold ${
-                      input.buyingArea === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                    className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                      input.buyingArea === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
                     }`}
                     onClick={() =>
                       setInput((current) => ({
@@ -619,16 +711,16 @@ export function FirstHomeDashboard({
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="space-y-3">
-              <div className="rounded-2xl border border-border bg-surface p-3">
+              <div className="rounded-xl border border-border bg-surface p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">After-tax income</span>
+                  <span className="text-sm font-semibold">Before-tax income</span>
                   <div className="flex gap-1">
                     {(["weekly", "monthly", "annually"] as const).map((frequency) => (
                       <button
                         key={`income-${frequency}`}
                         type="button"
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                          incomeFrequency === frequency ? "bg-primary text-white" : "bg-white ring-1 ring-border"
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
+                          incomeFrequency === frequency ? "bg-primary text-white" : "bg-white ring-1 ring-border hover:bg-surface-muted"
                         }`}
                         onClick={() => updateFrequency("income", frequency)}
                       >
@@ -642,9 +734,12 @@ export function FirstHomeDashboard({
                   value={display.annualSalary}
                   onChange={(event) => updateDisplay("annualSalary", event.currentTarget.value)}
                 />
+                <p className="mt-2 text-xs text-foreground-soft">
+                  Broad tax caveat: dashboard projections use a simple resident tax scenario.
+                </p>
               </div>
 
-              <div className="rounded-2xl border border-border bg-surface p-3">
+              <div className="rounded-xl border border-border bg-surface p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-semibold">Expected expenses</span>
                   <div className="flex gap-1">
@@ -652,8 +747,8 @@ export function FirstHomeDashboard({
                       <button
                         key={`expense-${frequency}`}
                         type="button"
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-                          expenseFrequency === frequency ? "bg-primary text-white" : "bg-white ring-1 ring-border"
+                        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
+                          expenseFrequency === frequency ? "bg-primary text-white" : "bg-white ring-1 ring-border hover:bg-surface-muted"
                         }`}
                         onClick={() => updateFrequency("expense", frequency)}
                       >
@@ -725,7 +820,7 @@ export function FirstHomeDashboard({
                   key={scenario.id}
                   type="button"
                   disabled={!scenario.available}
-                  className={`rounded-3xl border p-4 text-left transition ${scenarioButtonClass(scenario, selected)}`}
+                  className={`rounded-[1rem] border p-4 text-left transition ${scenarioButtonClass(scenario, selected)}`}
                   onClick={() =>
                     setSelections((current) => ({
                       ...current,
@@ -745,13 +840,34 @@ export function FirstHomeDashboard({
                     {scenario.statusNote}
                     {scenario.requiresLmi ? " LMI can apply." : ""}
                   </p>
+                  <p className="mt-2 text-xs font-semibold opacity-95">
+                    {`Estimated repayment (${frequencyLabel(expenseFrequency)}): ${formatCurrency(
+                      fromMonthlyAmount(
+                        amortizedMonthlyRepayment(
+                          scenario.mortgageAmount,
+                          CURRENT_MARKET_OWNER_OCCUPIER_RATE +
+                            ((input.targetPropertyPrice > 0
+                              ? (scenario.mortgageAmount / input.targetPropertyPrice) * 100
+                              : 0) > 95
+                              ? 0.6
+                              : (input.targetPropertyPrice > 0
+                                    ? (scenario.mortgageAmount / input.targetPropertyPrice) * 100
+                                    : 0) > 80
+                                ? 0.25
+                                : 0),
+                          30,
+                        ),
+                        expenseFrequency,
+                      ),
+                    )}`}
+                  </p>
                 </button>
               );
             })}
           </div>
 
           <div className="grid gap-3 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
-            <div className="rounded-3xl border border-border bg-surface p-4">
+            <div className="rounded-[1rem] border border-border bg-surface p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-strong">Time to save</p>
               <p className="mt-2 text-lg font-semibold">
                 {currentScenario ? `${timeToSaveYears} years` : "Unavailable"}
@@ -760,7 +876,7 @@ export function FirstHomeDashboard({
                 Assumes no inflation, raises, or changes to savings, debt, or expenses.
               </p>
             </div>
-            <div className="rounded-3xl border border-border bg-surface p-4">
+            <div className="rounded-[1rem] border border-border bg-surface p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-strong">Mortgage</p>
               <div className="mt-2 grid gap-2 text-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -778,8 +894,8 @@ export function FirstHomeDashboard({
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground-soft">P&I repayment</span>
-                  <span className="font-semibold">{formatCurrency(marketMonthlyRepayment)}</span>
+                  <span className="text-foreground-soft">{`P&I repayment (${frequencyLabel(expenseFrequency)})`}</span>
+                  <span className="font-semibold">{formatCurrency(marketRepaymentAtExpenseFrequency)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-foreground-soft">Payoff pace if flat</span>
@@ -794,25 +910,13 @@ export function FirstHomeDashboard({
       </SectionCard>
 
       <SectionCard
-        title="Cost of your First Home"
+        title="Cost breakdown details"
         subtitle="The left column is the current scheme-aware route. The grey column is the no-scheme comparison."
         isOpen={openSections.cost}
         onToggle={() => toggleSection("cost")}
       >
         <div data-testid="cost-of-first-home" className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] bg-[linear-gradient(135deg,#f0f7eb,#f7f2e7)] p-5">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Funds required from you</p>
-              <p data-testid="current-cash-outlay" className="mt-2 text-4xl font-semibold tracking-tight text-foreground">
-                {formatCurrency(currentCash)}
-              </p>
-            </div>
-            <div className="rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary-strong">
-              {formatCurrency(cashDifference)} less cash with the current setup
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-[1.75rem] border border-border">
+          <div className="overflow-hidden rounded-[1.25rem] border border-border">
             <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] bg-[#eef5e8] text-xs font-semibold uppercase tracking-[0.16em] text-primary-strong">
               <div className="px-4 py-3">Line item</div>
               <div className="px-4 py-3">Using schemes</div>
@@ -824,9 +928,16 @@ export function FirstHomeDashboard({
                 key={row.label}
                 className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] border-t border-border text-sm"
               >
-                <div className="px-4 py-3 font-medium text-foreground">{row.label}</div>
-                <div className="px-4 py-3 font-semibold text-foreground">{formatCurrency(row.currentValue)}</div>
-                <div className="bg-[#f6f4ee] px-4 py-3 font-semibold text-foreground-soft">{formatCurrency(row.baselineValue)}</div>
+                <div className="px-4 py-3 font-medium text-foreground">
+                  <span className="mr-2 inline-flex min-w-[1.1rem] justify-center font-semibold text-primary-strong">
+                    {row.sign}
+                  </span>
+                  {row.label}
+                </div>
+                <div className="px-4 py-3 font-semibold text-foreground">{signedCurrency(row.currentValue, row.sign)}</div>
+                <div className="bg-[#f6f4ee] px-4 py-3 font-semibold text-foreground-soft">
+                  {signedCurrency(row.baselineValue, row.sign)}
+                </div>
               </div>
             ))}
 
@@ -842,7 +953,11 @@ export function FirstHomeDashboard({
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-border bg-white/88 p-4">
+          <p className="rounded-xl border border-border bg-white px-4 py-3 text-sm text-foreground-soft">
+            Funds required from you = <span className="font-semibold">Home price - Bank funding + Transfer duty + Grouped setup costs</span>.
+          </p>
+
+          <div className="rounded-[1.25rem] border border-border bg-white/92 p-4">
             <button
               type="button"
               className="flex w-full items-center justify-between gap-3 text-left"
@@ -855,25 +970,34 @@ export function FirstHomeDashboard({
               {setupCostsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {setupCostsOpen ? (
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4 space-y-2">
                 {setupCostDetails.map((metric) => (
-                  <div key={metric.id} className="rounded-2xl bg-surface px-3 py-3 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-foreground-soft">{metric.label}</span>
-                      <span className="font-semibold">{metric.value}</span>
-                    </div>
+                  <div key={metric.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface px-3 py-2.5 text-sm">
+                    <span className="text-foreground-soft">
+                      <span className="cursor-help underline decoration-dotted" title={SETUP_COST_HINTS[metric.id] ?? "Settlement-related setup cost"}>
+                        {metric.label}
+                      </span>
+                    </span>
+                    <span className="font-semibold">{metric.value}</span>
                   </div>
                 ))}
+                <p className="pt-2 text-xs text-foreground-soft">
+                  Disclaimer: these were my own settlement-style costs based on an $850k property. Email me to get in touch:{" "}
+                  <a href="mailto:jacksonrogers2001@gmail.com" className="font-semibold text-primary underline underline-offset-2">
+                    jacksonrogers2001@gmail.com
+                  </a>
+                  .
+                </p>
               </div>
             ) : null}
           </div>
 
-          <div className="rounded-3xl border border-border bg-surface p-4 text-sm text-foreground-soft">
+          <div className="rounded-[1rem] border border-border bg-surface p-4 text-sm text-foreground-soft">
             The bank is providing {formatCurrency(withSchemes.cashOutlayOverlay.financedAmount)}. The buyer cash total only counts the deposit, transfer duty, and grouped setup costs.
           </div>
 
           {currentScenario && currentScenario.timeToSaveMonths > 12 ? (
-            <div className="rounded-[1.75rem] border border-[#d2bda2] bg-[#fbf4e8] p-5">
+            <div className="rounded-[1.25rem] border border-[#d2bda2] bg-[#fbf4e8] p-5">
               <div className="flex items-start gap-3">
                 <CircleAlert className="mt-0.5 h-5 w-5 text-[#7b5a33]" />
                 <div className="space-y-2">
@@ -890,6 +1014,9 @@ export function FirstHomeDashboard({
                     Open the official tool in a new tab
                     <ExternalLink className="h-4 w-4" />
                   </a>
+                  <Link href="/learn/fhss-concept" className="inline-flex text-sm font-semibold text-[#5c4426] underline underline-offset-4">
+                    Read the FHSS blog
+                  </Link>
                   <p className="text-xs text-[#6b5230]">Your dashboard stays open here.</p>
                 </div>
               </div>
@@ -903,23 +1030,14 @@ export function FirstHomeDashboard({
         isOpen={openSections.next}
         onToggle={() => toggleSection("next")}
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4">
           <Link
             href="/eoi/tools"
-            className="rounded-[1.75rem] border border-border bg-[#f2f7ee] p-5 transition hover:border-primary/30"
+            className="rounded-[1.1rem] border border-border bg-[#f2f7ee] p-5 transition hover:border-primary/30"
           >
-            <p className="text-xl font-semibold tracking-tight">Find more tools for you</p>
+            <p className="text-xl font-semibold tracking-tight">Join the Pro + Advice EOI</p>
             <p className="mt-2 text-sm text-foreground-soft">
-              Join the list for deeper calculators, comparison tools, and early-release access.
-            </p>
-          </Link>
-          <Link
-            href="/eoi/advice"
-            className="rounded-[1.75rem] border border-border bg-[#f7f1ed] p-5 transition hover:border-[#7a4a43]/25"
-          >
-            <p className="text-xl font-semibold tracking-tight">Receive accredited financial advice</p>
-            <p className="mt-2 text-sm text-foreground-soft">
-              Register interest for the future licensed advice pathway with human sign-off.
+              One expression-of-interest form for deeper tools and future licensed advice support.
             </p>
           </Link>
         </div>
@@ -927,13 +1045,13 @@ export function FirstHomeDashboard({
 
       </div>
 
-      <aside className="xl:sticky xl:top-24 xl:h-fit">
+      <aside className="space-y-4 xl:sticky xl:top-24 xl:h-fit">
         <Card className="bg-white/95 p-4 shadow-soft">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-semibold tracking-tight">Scheme tracker</h2>
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface text-foreground"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-muted text-foreground"
               onClick={() => setSchemePanelOpen((current) => !current)}
               aria-label="Toggle scheme tracker"
             >
@@ -943,33 +1061,46 @@ export function FirstHomeDashboard({
           {schemePanelOpen ? (
             <div className="mt-4 space-y-3">
               {withSchemes.schemeStatuses.map((scheme) => (
-                <div
-                  key={scheme.id}
-                  className={`rounded-2xl border p-3 ${schemePillClass(scheme.state)}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">{scheme.label}</p>
-                      <p className="mt-1 text-xs leading-5">{scheme.detail}</p>
+                <div key={scheme.id} className={`rounded-lg border p-2.5 ${schemePillClass(scheme.state)}`}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                    onClick={() => toggleSchemeDetail(scheme.id)}
+                  >
+                    <span className="text-xs font-semibold">{scheme.label}</span>
+                    <span className="inline-flex items-center gap-1">
+                      {scheme.state === "active" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      ) : scheme.state === "watch" || scheme.state === "available" ? (
+                        <CircleAlert className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                      )}
+                      {schemeDetailOpen[scheme.id] ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </span>
+                  </button>
+                  {schemeDetailOpen[scheme.id] ? (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-[11px] leading-5">{scheme.detail}</p>
+                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                        {scheme.href ? (
+                          <a
+                            href={scheme.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 underline underline-offset-4"
+                          >
+                            Official link
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : null}
+                        {SCHEME_BLOG_SLUG_BY_ID[scheme.id] ? (
+                          <Link href={`/learn/${SCHEME_BLOG_SLUG_BY_ID[scheme.id]}`} className="underline underline-offset-4">
+                            Scheme blog
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
-                    {scheme.state === "active" ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    ) : scheme.state === "watch" || scheme.state === "available" ? (
-                      <CircleAlert className="h-4 w-4 shrink-0" />
-                    ) : (
-                      <XCircle className="h-4 w-4 shrink-0 opacity-70" />
-                    )}
-                  </div>
-                  {scheme.href ? (
-                    <a
-                      href={scheme.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold underline underline-offset-4"
-                    >
-                      Learn more
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
                   ) : null}
                 </div>
               ))}
@@ -979,6 +1110,24 @@ export function FirstHomeDashboard({
               Expand this rail to see which relief and guarantee pathways are active.
             </p>
           )}
+        </Card>
+
+        <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary to-accent p-0 text-white shadow-[0_16px_34px_rgba(53,91,66,0.35)]">
+          <div className="space-y-4 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">EOI pathways</p>
+            <h3 className="text-2xl font-semibold tracking-tight">Need deeper support?</h3>
+            <p className="text-sm text-white/90">
+              Pro tools and future licensed advice are combined into one EOI lane right now.
+            </p>
+            <div className="grid gap-2">
+              <Link
+                href="/eoi/tools"
+                className="rounded-lg bg-white px-4 py-2 text-center text-sm font-semibold text-primary transition hover:bg-white/90"
+              >
+                Join Pro + Advice EOI
+              </Link>
+            </div>
+          </div>
         </Card>
       </aside>
     </div>

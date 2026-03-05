@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const message = [
     `Hi ${name},`,
     "",
-    "Your Aussies First Home summary is ready.",
+    "Your First Aussie Home summary is ready.",
     `Funds required from you now: ${formatCurrency(currentCash)}`,
     `Bank funding shown in the comparison: ${formatCurrency(financedAmount)}`,
     `20% baseline cash shown in the comparison: ${formatCurrency(baselineCash)}`,
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     await resend.emails.send({
       from: process.env.EMAIL_FROM,
       to: email,
-      subject: "Your Aussies First Home summary",
+      subject: "Your First Aussie Home summary",
       text: message,
     });
 

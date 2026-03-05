@@ -70,9 +70,14 @@ type QualitativeQuestion = BooleanQuestion | ChoiceQuestion;
 
 type QuantitativeQuestion = {
   id: QuantitativeQuestionId;
-  prompt: string;
+  label: string;
   placeholder: string;
   frequencyKey?: "income" | "expense";
+};
+
+type QuantitativeBatch = {
+  title: string;
+  fields: QuantitativeQuestion[];
 };
 
 const QUIZ_STORAGE_KEY = "aussiesfirsthome:first-home-quiz";
@@ -180,19 +185,32 @@ const QUALITATIVE_GROUPS: Array<{
   },
 ];
 
-const QUANTITATIVE_QUESTIONS: QuantitativeQuestion[] = [
-  { id: "age", prompt: "How old are you?", placeholder: "69" },
-  { id: "annualSalary", prompt: "What is your after-tax income?", placeholder: "$4.20", frequencyKey: "income" },
-  { id: "privateDebt", prompt: "How much private debt do you have?", placeholder: "$13.37" },
-  { id: "hecsDebt", prompt: "How much HECS / HELP debt do you have?", placeholder: "$42" },
-  { id: "currentSavings", prompt: "How much do you already have saved?", placeholder: "$123" },
+const QUANTITATIVE_BATCHES: QuantitativeBatch[] = [
   {
-    id: "averageMonthlyExpenses",
-    prompt: "What are your expected expenses (you can ignore rent!)?",
-    placeholder: "$808",
-    frequencyKey: "expense",
+    title: "Batch 1: Age, income, and expenses",
+    fields: [
+      { id: "age", label: "How old are you?", placeholder: "Age" },
+      { id: "annualSalary", label: "What is your before-tax income?", placeholder: "$60,000", frequencyKey: "income" },
+      {
+        id: "averageMonthlyExpenses",
+        label: "What are your expected expenses?",
+        placeholder: "Weekly/Monthly/Annual Expenses",
+        frequencyKey: "expense",
+      },
+    ],
   },
-  { id: "targetPropertyPrice", prompt: "What price are you aiming to buy at?", placeholder: "$999,999" },
+  {
+    title: "Batch 2: Savings and current debt",
+    fields: [
+      { id: "currentSavings", label: "How much do you already have saved?", placeholder: "$10,000" },
+      { id: "privateDebt", label: "How much private debt do you have?", placeholder: "$10,000" },
+      { id: "hecsDebt", label: "How much HECS / HELP debt do you have?", placeholder: "$10,000" },
+    ],
+  },
+  {
+    title: "Batch 3: Target property",
+    fields: [{ id: "targetPropertyPrice", label: "What price are you aiming to buy at?", placeholder: "$1,000,000" }],
+  },
 ];
 
 function buildDefaultSelections(input: HomeownerPathwayInput): HomeownerPathwaySelections {
@@ -264,12 +282,24 @@ function formatLiveValue(field: QuantitativeQuestionId, raw: string) {
   return raw.trim().length === 0 ? "" : formatCurrencyInput(parsed);
 }
 
+function expensePlaceholderForFrequency(frequency: Frequency) {
+  if (frequency === "weekly") {
+    return "Weekly Expenses";
+  }
+
+  if (frequency === "annually") {
+    return "Annual Expenses";
+  }
+
+  return "Monthly Expenses";
+}
+
 export function FirstHomeQuizFlow() {
   const router = useRouter();
   const { setDisclosure } = useDisclosure();
   const [stage, setStage] = useState<Stage>("qualitative");
   const [qualitativeGroupIndex, setQualitativeGroupIndex] = useState(0);
-  const [quantitativeIndex, setQuantitativeIndex] = useState(0);
+  const [quantitativeBatchIndex, setQuantitativeBatchIndex] = useState(0);
   const [input, setInput] = useState<HomeownerPathwayInput>({
     ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
     livingInNsw: true,
@@ -316,6 +346,7 @@ export function FirstHomeQuizFlow() {
       const saved = JSON.parse(raw) as {
         stage?: Stage;
         qualitativeGroupIndex?: number;
+        quantitativeBatchIndex?: number;
         quantitativeIndex?: number;
         input?: HomeownerPathwayInput;
         qualitativeAnswers?: Partial<Record<QualitativeQuestionId, boolean | string>>;
@@ -333,8 +364,16 @@ export function FirstHomeQuizFlow() {
       if (typeof saved.qualitativeGroupIndex === "number") {
         setQualitativeGroupIndex(saved.qualitativeGroupIndex);
       }
-      if (typeof saved.quantitativeIndex === "number") {
-        setQuantitativeIndex(saved.quantitativeIndex);
+      if (typeof saved.quantitativeBatchIndex === "number") {
+        setQuantitativeBatchIndex(saved.quantitativeBatchIndex);
+      } else if (typeof saved.quantitativeIndex === "number") {
+        if (saved.quantitativeIndex <= 2) {
+          setQuantitativeBatchIndex(0);
+        } else if (saved.quantitativeIndex <= 5) {
+          setQuantitativeBatchIndex(1);
+        } else {
+          setQuantitativeBatchIndex(2);
+        }
       }
       if (saved.input) {
         const savedHomeState = saved.input.homeState ?? (saved.input.livingInNsw === false ? "vic" : "nsw");
@@ -382,7 +421,7 @@ export function FirstHomeQuizFlow() {
         JSON.stringify({
           stage,
           qualitativeGroupIndex,
-          quantitativeIndex,
+          quantitativeBatchIndex,
           input,
           qualitativeAnswers,
           incomeFrequency,
@@ -401,7 +440,7 @@ export function FirstHomeQuizFlow() {
   }, [
     stage,
     qualitativeGroupIndex,
-    quantitativeIndex,
+    quantitativeBatchIndex,
     input,
     qualitativeAnswers,
     incomeFrequency,
@@ -414,10 +453,11 @@ export function FirstHomeQuizFlow() {
 
   const activeGroup = QUALITATIVE_GROUPS[qualitativeGroupIndex] ?? QUALITATIVE_GROUPS[0];
   const canAdvanceQualitative = activeGroup.questions.every((question) => question.id in qualitativeAnswers);
-  const activeQuantitativeQuestion = QUANTITATIVE_QUESTIONS[quantitativeIndex];
-  const canAdvanceQuantitative = activeQuantitativeQuestion
-    ? quantitativeDisplay[activeQuantitativeQuestion.id].trim().length > 0
-    : false;
+  const activeQuantitativeBatch = QUANTITATIVE_BATCHES[quantitativeBatchIndex];
+  const canAdvanceQuantitative =
+    activeQuantitativeBatch?.fields.every(
+      (field) => quantitativeDisplay[field.id].trim().length > 0,
+    ) ?? false;
 
   function answerBoolean(question: BooleanQuestion, answer: boolean) {
     setInput((current) => (answer ? question.applyYes(current) : question.applyNo(current)));
@@ -445,6 +485,7 @@ export function FirstHomeQuizFlow() {
       return;
     }
 
+    setQuantitativeBatchIndex(0);
     setStage("quantitative");
   }
 
@@ -503,8 +544,8 @@ export function FirstHomeQuizFlow() {
       return;
     }
 
-    if (quantitativeIndex < QUANTITATIVE_QUESTIONS.length - 1) {
-      setQuantitativeIndex((current) => current + 1);
+    if (quantitativeBatchIndex < QUANTITATIVE_BATCHES.length - 1) {
+      setQuantitativeBatchIndex((current) => current + 1);
       return;
     }
 
@@ -512,8 +553,8 @@ export function FirstHomeQuizFlow() {
   }
 
   function goBackQuantitative() {
-    if (quantitativeIndex > 0) {
-      setQuantitativeIndex((current) => current - 1);
+    if (quantitativeBatchIndex > 0) {
+      setQuantitativeBatchIndex((current) => current - 1);
       return;
     }
 
@@ -575,8 +616,8 @@ export function FirstHomeQuizFlow() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[2rem] border border-border bg-[linear-gradient(180deg,#f8f4ea,#eef4e9)] p-5 shadow-soft">
+    <div className="animate-fade-in space-y-6">
+      <section className="rounded-[1.4rem] border border-border bg-[linear-gradient(180deg,#ffffff,#f4f6f1)] p-5 shadow-[0_14px_34px_rgba(33,47,37,0.1)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
@@ -586,7 +627,7 @@ export function FirstHomeQuizFlow() {
               {stage === "qualitative"
                 ? `Batch ${qualitativeGroupIndex + 1} of ${QUALITATIVE_GROUPS.length}`
                 : stage === "quantitative"
-                  ? `Question ${quantitativeIndex + 1} of ${QUANTITATIVE_QUESTIONS.length}`
+                  ? `Batch ${quantitativeBatchIndex + 1} of ${QUANTITATIVE_BATCHES.length}`
                   : "One last step before the dashboard"}
             </p>
           </div>
@@ -594,7 +635,7 @@ export function FirstHomeQuizFlow() {
             {[1, 2, 3].map((dot) => (
               <span
                 key={dot}
-                className={`h-2.5 w-8 rounded-full ${
+                className={`h-2.5 w-8 rounded-full transition-colors ${
                   (stage === "qualitative" && dot <= 1) ||
                   (stage === "quantitative" && dot <= 2) ||
                   (stage === "account" && dot <= 3)
@@ -614,7 +655,7 @@ export function FirstHomeQuizFlow() {
 
             if (question.type === "choice") {
               return (
-                <Card key={question.id} className="space-y-4 bg-white/90 p-5">
+                <Card key={question.id} className="animate-fade-up space-y-4 bg-white p-6">
                   <p className="text-xl font-semibold tracking-tight">{question.prompt}</p>
                   <div className="flex flex-col gap-3 sm:flex-row">
                     {question.options.map((option) => (
@@ -622,10 +663,10 @@ export function FirstHomeQuizFlow() {
                         key={option.value}
                         type="button"
                         data-testid={`quiz-${question.id}-${option.value}`}
-                        className={`rounded-2xl px-5 py-4 text-sm font-semibold ${
+                        className={`rounded-xl px-5 py-4 text-sm font-semibold transition-all ${
                           answer === option.value
-                            ? "bg-primary text-white"
-                            : "bg-surface text-foreground ring-1 ring-border"
+                            ? "bg-primary text-white shadow-[0_8px_20px_rgba(74,124,89,0.3)]"
+                            : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted"
                         }`}
                         onClick={() => answerChoice(question, option.value)}
                       >
@@ -638,14 +679,16 @@ export function FirstHomeQuizFlow() {
             }
 
             return (
-              <Card key={question.id} className="space-y-4 bg-white/90 p-5">
+              <Card key={question.id} className="animate-fade-up space-y-4 bg-white p-6">
                 <p className="text-xl font-semibold tracking-tight">{question.prompt}</p>
                 <div className="flex gap-3">
                   <button
                     type="button"
                     data-testid={`quiz-${question.id}-yes`}
-                    className={`rounded-2xl px-5 py-3 text-sm font-semibold ${
-                      answer === true ? "bg-primary text-white" : "bg-[#f0f5ec] text-foreground ring-1 ring-border"
+                    className={`rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
+                      answer === true
+                        ? "bg-primary text-white shadow-[0_8px_20px_rgba(74,124,89,0.3)]"
+                        : "bg-[#f0f5ec] text-foreground ring-1 ring-border hover:bg-[#e8efe2]"
                     }`}
                     onClick={() => answerBoolean(question, true)}
                   >
@@ -654,8 +697,8 @@ export function FirstHomeQuizFlow() {
                   <button
                     type="button"
                     data-testid={`quiz-${question.id}-no`}
-                    className={`rounded-2xl px-5 py-3 text-sm font-semibold ${
-                      answer === false ? "bg-[#7a4a43] text-white" : "bg-[#f7f1ed] text-foreground ring-1 ring-border"
+                    className={`rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
+                      answer === false ? "bg-[#7a4a43] text-white" : "bg-[#f7f1ed] text-foreground ring-1 ring-border hover:bg-[#efe7e0]"
                     }`}
                     onClick={() => answerBoolean(question, false)}
                   >
@@ -678,54 +721,61 @@ export function FirstHomeQuizFlow() {
         </section>
       ) : null}
 
-      {stage === "quantitative" && activeQuantitativeQuestion ? (
-        <Card className="space-y-6 bg-white/90 p-6">
+      {stage === "quantitative" && activeQuantitativeBatch ? (
+        <Card className="animate-fade-up space-y-6 bg-white p-6 md:p-8">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
-              Question {quantitativeIndex + 1}
+              Batch {quantitativeBatchIndex + 1}
             </p>
-            <h2 className="text-2xl font-semibold tracking-tight">{activeQuantitativeQuestion.prompt}</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">{activeQuantitativeBatch.title}</h2>
+            <p className="text-sm text-foreground-soft">
+              Broad tax caveat: we use a simple tax scenario for estimate-only modelling.
+            </p>
           </div>
 
-          {activeQuantitativeQuestion.frequencyKey ? (
-            <div className="flex flex-wrap gap-2">
-              {(["weekly", "monthly", "annually"] as const).map((frequency) => {
-                const currentFrequency =
-                  activeQuantitativeQuestion.frequencyKey === "income" ? incomeFrequency : expenseFrequency;
+          <div className="grid gap-4">
+            {activeQuantitativeBatch.fields.map((field) => (
+              <label key={field.id} className="grid gap-2">
+                <span className="text-sm font-semibold">{field.label}</span>
+                {field.frequencyKey ? (
+                  <div className="flex flex-wrap gap-2">
+                    {(["weekly", "monthly", "annually"] as const).map((frequency) => {
+                      const currentFrequency =
+                        field.frequencyKey === "income" ? incomeFrequency : expenseFrequency;
 
-                return (
-                  <button
-                    key={frequency}
-                    type="button"
-                    className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                      currentFrequency === frequency
-                        ? "bg-primary text-white"
-                        : "bg-surface text-foreground ring-1 ring-border"
-                    }`}
-                    onClick={() => updateFrequency(activeQuantitativeQuestion.frequencyKey!, frequency)}
-                  >
-                    {frequency}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <Input
-            data-testid={`quiz-${activeQuantitativeQuestion.id}`}
-            type="text"
-            inputMode="numeric"
-            placeholder={activeQuantitativeQuestion.placeholder}
-            className="h-14 text-2xl placeholder:text-[#9aa097]"
-            value={quantitativeDisplay[activeQuantitativeQuestion.id]}
-            onChange={(event) => updateQuantitativeValue(activeQuantitativeQuestion.id, event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                goNextQuantitative();
-              }
-            }}
-          />
+                      return (
+                        <button
+                          key={`${field.id}-${frequency}`}
+                          type="button"
+                          className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                            currentFrequency === frequency
+                              ? "bg-primary text-white"
+                              : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted"
+                          }`}
+                          onClick={() => updateFrequency(field.frequencyKey!, frequency)}
+                        >
+                          {frequency}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <Input
+                  data-testid={`quiz-${field.id}`}
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={
+                    field.id === "averageMonthlyExpenses"
+                      ? expensePlaceholderForFrequency(expenseFrequency)
+                      : field.placeholder
+                  }
+                  className="h-14 text-xl placeholder:text-[#9aa097]"
+                  value={quantitativeDisplay[field.id]}
+                  onChange={(event) => updateQuantitativeValue(field.id, event.currentTarget.value)}
+                />
+              </label>
+            ))}
+          </div>
 
           <div className="flex items-center justify-between gap-3">
             <Button type="button" variant="secondary" onClick={goBackQuantitative}>
@@ -741,7 +791,7 @@ export function FirstHomeQuizFlow() {
       ) : null}
 
       {stage === "account" ? (
-        <Card className="space-y-6 bg-white/90 p-6">
+        <Card className="animate-fade-up space-y-6 bg-white p-6 md:p-8">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
               <Sparkles className="h-4 w-4" />
@@ -749,7 +799,7 @@ export function FirstHomeQuizFlow() {
             </div>
             <h2 className="text-3xl font-semibold tracking-tight">Your dashboard is ready.</h2>
             <p className="text-sm text-foreground-soft">
-              Add your name, email, and a quick story. A placeholder version is fine if you prefer, but I would still like a broad outline so I can understand how to help with your first-home purchase.
+              We want to hear about your story. Thousands of young Aussies are struggling to buy their first home and we would love to hear how we can help.
             </p>
           </div>
 
@@ -777,21 +827,12 @@ export function FirstHomeQuizFlow() {
           <label className="grid gap-2 text-sm font-semibold">
             <span>Your story</span>
             <textarea
-              className="min-h-28 rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground outline-none ring-0 placeholder:text-[#9aa097] focus:border-primary"
-              placeholder="A broad or placeholder version is okay. For example: first job, steady PAYG income, trying to work out what I can buy."
+              className="min-h-28 rounded-xl border border-border bg-[#f9f8f6] px-4 py-3 text-sm text-foreground outline-none ring-0 placeholder:text-[#9aa097] focus:border-primary focus:bg-white"
+              placeholder="We want to hear about your story! Thousands of young Aussies are struggling to buy their first home and we would love to hear how we can help!"
               value={accountStory}
               onChange={(event) => setAccountStory(event.currentTarget.value)}
             />
           </label>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            {preview.heroSummary.map((item) => (
-              <div key={item.label} className="rounded-3xl bg-[#f2f7ee] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-strong">{item.label}</p>
-                <p className="mt-2 text-lg font-semibold">{item.value}</p>
-              </div>
-            ))}
-          </div>
 
           <div className="flex items-center justify-between gap-3">
             <Button
@@ -799,7 +840,7 @@ export function FirstHomeQuizFlow() {
               variant="secondary"
               onClick={() => {
                 setStage("quantitative");
-                setQuantitativeIndex(QUANTITATIVE_QUESTIONS.length - 1);
+                setQuantitativeBatchIndex(QUANTITATIVE_BATCHES.length - 1);
               }}
             >
               <ChevronLeft className="mr-1 h-4 w-4" />

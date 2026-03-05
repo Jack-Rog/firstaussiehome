@@ -28,7 +28,7 @@ export function LearningPathList({
             </p>
             <ul className="space-y-2 text-sm text-foreground-soft">
               {path.checkpoints.map((checkpoint) => (
-                <li key={checkpoint}>• {checkpoint}</li>
+                <li key={checkpoint}>- {checkpoint}</li>
               ))}
             </ul>
             <Link href={`/learn?path=${path.id}`} className="mt-auto font-semibold text-primary">

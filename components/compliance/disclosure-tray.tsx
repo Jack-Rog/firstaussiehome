@@ -28,10 +28,10 @@ export function DisclosureTray({
       <button
         type="button"
         aria-label="Close disclosure tray"
-        className="fixed inset-0 z-30 bg-black/20"
+        className="fixed inset-0 z-30 bg-black/35"
         onClick={onClose}
       />
-      <div className="fixed inset-x-3 bottom-16 z-40 mx-auto max-w-4xl rounded-[1.75rem] border border-border bg-white p-5 shadow-2xl">
+      <div className="fixed inset-x-3 bottom-16 z-40 mx-auto max-w-4xl rounded-[1.25rem] border border-border bg-white p-5 shadow-2xl">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-semibold text-primary-strong">
             {mode === "links" ? "Official links" : mode === "assumptions" ? "Assumptions" : "Reviewed"}
@@ -44,7 +44,7 @@ export function DisclosureTray({
         {mode === "links" ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {sources.map((source) => (
-              <div key={`${source.label}-${source.note}`} className="rounded-3xl border border-border bg-surface p-4">
+              <div key={`${source.label}-${source.note}`} className="rounded-[1rem] border border-border bg-surface p-4">
                 {source.href ? (
                   <a
                     href={source.href}
@@ -66,7 +66,7 @@ export function DisclosureTray({
         {mode === "assumptions" ? (
           <div className="mt-4 grid gap-3">
             {assumptions.map((assumption) => (
-              <div key={assumption} className="rounded-3xl border border-border bg-surface p-4 text-sm text-foreground-soft">
+              <div key={assumption} className="rounded-[1rem] border border-border bg-surface p-4 text-sm text-foreground-soft">
                 {assumption}
               </div>
             ))}
@@ -74,7 +74,7 @@ export function DisclosureTray({
         ) : null}
 
         {mode === "reviewed" ? (
-          <div className="mt-4 rounded-3xl border border-border bg-surface p-4">
+          <div className="mt-4 rounded-[1rem] border border-border bg-surface p-4">
             <p className="text-sm text-foreground-soft">
               Current source review date: <span className="font-semibold text-foreground">{reviewDate}</span>
             </p>

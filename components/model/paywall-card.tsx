@@ -5,17 +5,17 @@ export function PaywallCard({ paymentsDemo }: { paymentsDemo: boolean }) {
   return (
     <Card className="space-y-4">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Tier 2 next step</p>
-      <CardTitle>Tier 2 modelling is part of Pro</CardTitle>
+      <CardTitle>Tier 2 modelling is currently EOI only</CardTitle>
       <CardText>
-        Tier 1 handles the broad fit quiz and first-home fact cards. Pro adds CSV import, deeper scenario sliders,
-        and an on-screen readiness report. It remains modelling only and not personal financial advice.
+        Tier 1 handles the broad fit quiz and first-home fact cards. Tier 2 and licensed advice pathways are both
+        expression-of-interest only right now.
       </CardText>
-      {paymentsDemo ? <p className="text-sm font-semibold text-primary-strong">Payments disabled in dev</p> : null}
+      {paymentsDemo ? <p className="text-sm font-semibold text-primary-strong">Payments are disabled in dev</p> : null}
       <Link
-        href="/pricing"
+        href="/eoi/tools"
         className="inline-flex w-fit items-center rounded-full bg-primary px-5 py-3 font-semibold text-white"
       >
-        View Pro access
+        Join Pro + Advice EOI
       </Link>
     </Card>
   );

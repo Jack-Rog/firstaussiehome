@@ -38,20 +38,28 @@ test("landing routes into the first-home quiz and unlocks the dashboard", async 
   }
   await page.getByTestId("qual-batch-continue").click();
 
-  const quantitativeEntries: Array<[string, string]> = [
+  const batchOne: Array<[string, string]> = [
     ["quiz-age", "28"],
     ["quiz-annualSalary", "95000"],
+    ["quiz-averageMonthlyExpenses", "2600"],
+  ];
+  for (const [testId, value] of batchOne) {
+    await page.getByTestId(testId).fill(value);
+  }
+  await page.getByTestId("quant-next").click();
+
+  const batchTwo: Array<[string, string]> = [
+    ["quiz-currentSavings", "65000"],
     ["quiz-privateDebt", "9000"],
     ["quiz-hecsDebt", "21000"],
-    ["quiz-currentSavings", "65000"],
-    ["quiz-averageMonthlyExpenses", "2600"],
-    ["quiz-targetPropertyPrice", "790000"],
   ];
-
-  for (const [testId, value] of quantitativeEntries) {
+  for (const [testId, value] of batchTwo) {
     await page.getByTestId(testId).fill(value);
-    await page.getByTestId(testId).press("Enter");
   }
+  await page.getByTestId("quant-next").click();
+
+  await page.getByTestId("quiz-targetPropertyPrice").fill("790000");
+  await page.getByTestId("quant-next").click();
 
   await expect(page.getByRole("heading", { name: "Your dashboard is ready." })).toBeVisible();
   await page.getByLabel("Name").fill("Sam");

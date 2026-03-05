@@ -1,33 +1,72 @@
+import Link from "next/link";
+import { Check, Sparkles, Zap } from "lucide-react";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
+
+const TIER_FEATURES = {
+  free: [
+    "Free quiz",
+    "Broad scheme checks",
+    "Factual first-home calculators",
+    "Guided learning",
+  ],
+  eoi: [
+    "CSV import",
+    "Deeper scenario modelling",
+    "Readiness reporting",
+    "State scheme detail checks",
+    "Licensed advice (coming soon)",
+    "Expression-of-interest only",
+    "Future human sign-off workflow",
+  ],
+};
 
 export function PricingGrid({ paymentsDemo }: { paymentsDemo: boolean }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <Card className="space-y-4 border-primary/20 bg-primary/5">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Start here</p>
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card className="animate-fade-up space-y-5 border-primary/20 bg-white/92">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary-strong">
+          <Sparkles className="h-3.5 w-3.5" />
+          Start here
+        </div>
         <CardTitle>Tier 1</CardTitle>
         <CardText>Free quiz, broad scheme checks, factual first-home calculators, and guided learning.</CardText>
-        <p className="text-3xl font-semibold">Free</p>
+        <p className="text-4xl font-semibold">Free</p>
+        <ul className="space-y-2 text-sm text-foreground-soft">
+          {TIER_FEATURES.free.map((feature) => (
+            <li key={feature} className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 text-primary" />
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
       </Card>
-      <Card className="space-y-4 border-primary bg-primary-strong text-white">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">Next if needed</p>
-        <CardTitle className="text-white">Tier 2 Pro</CardTitle>
-        <CardText className="text-white/80">
-          CSV import, deeper scenario modelling, and readiness reporting after the Tier 1 facts are clear. Modelling only.
+
+      <Card className="animate-fade-up animation-delay-100 space-y-5 border-primary/35 bg-gradient-to-br from-primary to-accent text-white shadow-[0_16px_34px_rgba(53,91,66,0.35)]">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
+          <Zap className="h-3.5 w-3.5" />
+          Optional next step
+        </div>
+        <CardTitle className="text-white">Pro + Advice EOI</CardTitle>
+        <CardText className="text-white/85">
+          One combined expression-of-interest lane for advanced tools and future licensed advice.
         </CardText>
-        <p className="text-3xl font-semibold">$19/mo</p>
-        <form action="/api/stripe/checkout" method="POST">
-          <button className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-primary-strong">
-            {paymentsDemo ? "Enable Pro demo access" : "Start Pro"}
-          </button>
-        </form>
-        {paymentsDemo ? <p className="text-xs text-white/70">Payments disabled in dev</p> : null}
-      </Card>
-      <Card className="space-y-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Future lane</p>
-        <CardTitle>Tier 3</CardTitle>
-        <CardText>Licensed advice (coming soon). Expression of interest only at launch.</CardText>
-        <p className="text-3xl font-semibold">EOI</p>
+        <p className="text-4xl font-semibold">EOI</p>
+        <ul className="space-y-2 text-sm text-white/85">
+          {TIER_FEATURES.eoi.map((feature) => (
+            <li key={feature} className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 text-white" />
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
+        <Link href="/eoi/tools" className="w-full rounded-xl bg-white px-5 py-3 text-center text-sm font-semibold text-primary transition hover:bg-white/90">
+          Join combined EOI
+        </Link>
+        {paymentsDemo ? (
+          <p className="text-xs text-white/80">Payments are disabled in dev. Pro options are EOI only.</p>
+        ) : (
+          <p className="text-xs text-white/80">No paid integration currently. This combined lane is expression-of-interest only.</p>
+        )}
       </Card>
     </div>
   );

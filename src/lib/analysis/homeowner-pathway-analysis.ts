@@ -6,6 +6,7 @@ import {
   listBenchmarkSources,
 } from "@/src/lib/benchmarks/first-home-benchmarks";
 import { REFERENCE_LINKS } from "@/src/lib/references";
+import { getStampDutyMemory } from "@/src/lib/state-scheme-memory";
 import type {
   CashOutlayOverlayModel,
   ExplorerSource,
@@ -20,12 +21,12 @@ import type {
 import { formatCurrency, formatPercent } from "@/src/lib/utils";
 
 export const HOMEOWNER_PATHWAY_REVIEW_DATE = "2026-03-03";
-const TAKE_HOME_PROXY = 0.76;
 const HOME_LOAN_COMPARISON_RATE = 6.1;
 export const CURRENT_MARKET_OWNER_OCCUPIER_RATE = 5.42;
 const HOME_LOAN_TERM_YEARS = 30;
 const PRIVATE_DEBT_RATE = 8.5;
 const PRIVATE_DEBT_TERM_YEARS = 5;
+const SIMPLE_MEDICARE_RATE = 0.02;
 const FIRST_HOME_GUARANTEE_CAPS = {
   nsw: { "state-capital": 1500000, regional: 800000 },
   vic: { "state-capital": 950000, regional: 650000 },
@@ -74,48 +75,6 @@ const HOME_STATE_LABELS = {
   act: "ACT",
   nt: "NT",
 } as const;
-const STATE_STAMP_DUTY_SCHEMES = {
-  nsw: {
-    label: "NSW First Home Buyers Assistance Scheme",
-    href: "https://www.revenue.nsw.gov.au/grants-schemes/first-home-buyer",
-    modelled: true,
-  },
-  vic: {
-    label: "Victoria first home buyer duty exemption / concession",
-    href: "https://www.sro.vic.gov.au/first-home-owner",
-    modelled: false,
-  },
-  qld: {
-    label: "Queensland first home transfer duty concession",
-    href: "https://qro.qld.gov.au/duties/transfer-duty/concessions/homes/first-home/",
-    modelled: false,
-  },
-  wa: {
-    label: "WA first home owner rate of duty",
-    href: "https://www.wa.gov.au/service/financial-management/taxation-and-duty-payments/first-home-owner-rate-duty",
-    modelled: false,
-  },
-  sa: {
-    label: "SA first home buyer relief",
-    href: "https://www.revenuesa.sa.gov.au/stampduty/first-home-buyer-relief",
-    modelled: false,
-  },
-  tas: {
-    label: "Tasmania property transfer duty guidance",
-    href: "https://www.sro.tas.gov.au/property-transfer-duty",
-    modelled: false,
-  },
-  act: {
-    label: "ACT Home Buyer Concession Scheme",
-    href: "https://www.revenue.act.gov.au/home-buyer-assistance/home-buyer-concession-scheme",
-    modelled: false,
-  },
-  nt: {
-    label: "NT Home Owner Assistance",
-    href: "https://nt.gov.au/property/home-owner-assistance",
-    modelled: false,
-  },
-} as const;
 
 export const DEFAULT_HOMEOWNER_PATHWAY_INPUT: HomeownerPathwayInput = {
   firstHomeBuyer: false,
@@ -149,6 +108,33 @@ export const DEFAULT_HOMEOWNER_PATHWAY_SELECTIONS: HomeownerPathwaySelections = 
 
 function clampMoney(value: number) {
   return Math.max(0, Number.isFinite(value) ? value : 0);
+}
+
+function calculateSimpleIncomeTax(grossAnnualIncome: number) {
+  if (grossAnnualIncome <= 18200) {
+    return 0;
+  }
+
+  if (grossAnnualIncome <= 45000) {
+    return (grossAnnualIncome - 18200) * 0.16;
+  }
+
+  if (grossAnnualIncome <= 135000) {
+    return 4288 + (grossAnnualIncome - 45000) * 0.3;
+  }
+
+  if (grossAnnualIncome <= 190000) {
+    return 31288 + (grossAnnualIncome - 135000) * 0.37;
+  }
+
+  return 51638 + (grossAnnualIncome - 190000) * 0.45;
+}
+
+function calculateSimpleNetAnnualIncome(grossAnnualIncome: number) {
+  const taxableIncome = Math.max(grossAnnualIncome, 0);
+  const incomeTax = calculateSimpleIncomeTax(taxableIncome);
+  const medicare = taxableIncome * SIMPLE_MEDICARE_RATE;
+  return Math.max(taxableIncome - incomeTax - medicare, 0);
 }
 
 function amortizedMonthlyRepayment(principal: number, annualRate: number, termYears: number) {
@@ -372,6 +358,7 @@ export function buildHomeownerPathwayOutput(
   input.livingInNsw = isNsw;
   const eligibility = getEligibilityState(input);
   const stateKey = input.homeState ?? "nsw";
+  const stampDutyMemory = getStampDutyMemory(stateKey, input.buyingArea);
   const guaranteeCap = FIRST_HOME_GUARANTEE_CAPS[stateKey][input.buyingArea];
   const helpToBuyCap = HELP_TO_BUY_CAPS[stateKey][input.buyingArea];
   const firstHomeGuaranteeAvailable =
@@ -381,7 +368,7 @@ export function buildHomeownerPathwayOutput(
     HELP_TO_BUY_SUPPORTED_STATES[stateKey] &&
     eligibility.label === "MAY BE ELIGIBLE" &&
     input.targetPropertyPrice <= helpToBuyCap;
-  const netMonthlyIncome = (input.annualSalary * TAKE_HOME_PROXY) / 12;
+  const netMonthlyIncome = calculateSimpleNetAnnualIncome(input.annualSalary) / 12;
   const privateDebtServicing = amortizedMonthlyRepayment(
     input.privateDebt,
     PRIVATE_DEBT_RATE,
@@ -648,7 +635,7 @@ export function buildHomeownerPathwayOutput(
     metrics: [
       {
         id: "upfront-professional",
-        label: "Professional fees",
+        label: "Solicitor/Conveyancer fees",
         value: formatCurrency(scaledSetupCosts.professionalFees),
       },
       {
@@ -744,14 +731,14 @@ export function buildHomeownerPathwayOutput(
     schemeStatuses: [
       {
         id: "stamp-duty",
-        label: STATE_STAMP_DUTY_SCHEMES[stateKey].label,
-        state: !STATE_STAMP_DUTY_SCHEMES[stateKey].modelled ? "watch" : dutySaving > 0 ? "active" : "inactive",
-        detail: !STATE_STAMP_DUTY_SCHEMES[stateKey].modelled
-          ? "State-specific relief is linked here for a manual check"
+        label: stampDutyMemory.label,
+        state: !isNsw ? "watch" : dutySaving > 0 ? "active" : "inactive",
+        detail: !isNsw
+          ? `Manual check needed. ${stampDutyMemory.areaNote}`
           : dutySaving > 0
-            ? `${formatCurrency(dutySaving)} less duty`
-            : "Outside the current broad duty band",
-        href: STATE_STAMP_DUTY_SCHEMES[stateKey].href,
+            ? `${formatCurrency(dutySaving)} less duty. ${stampDutyMemory.areaNote}`
+            : `Outside the current broad duty band. ${stampDutyMemory.areaNote}`,
+        href: stampDutyMemory.href,
       },
       {
         id: "guarantee",
@@ -799,9 +786,9 @@ export function buildHomeownerPathwayOutput(
     assumptions: [
       "Factual education and modelling only.",
       "NSW duty and first-home relief use source-dated illustrative settings.",
-      "Other states and territories show broad tracking only. Their stamp duty relief rules are not modelled here yet.",
+      "Other states and territories use stored state memory notes with capital vs regional context and still require manual official confirmation.",
       "Capital-city and regional scheme comparisons use broad price bands for high-level screening only.",
-      "Net income uses a 76% gross-to-net proxy.",
+      "Net income uses a simple resident tax scenario (including a broad 2% Medicare component) with no offsets, deductions, or levy exemptions.",
       "Mortgage comparisons use a 30-year principal-and-interest loan at 6.1%.",
       `Market-rate tiles use an educational owner-occupier estimate of ${CURRENT_MARKET_OWNER_OCCUPIER_RATE.toFixed(2)}% before any higher-LVR adjustment.`,
       "Private debt servicing uses a 5-year comparison term at 8.5%.",

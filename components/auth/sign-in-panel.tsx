@@ -59,7 +59,7 @@ export function SignInPanel({
             startTransition(() => {
               void signIn("credentials", {
                 email,
-                name: "Aussies First Home Demo User",
+                name: "First Aussie Home Demo User",
                 callbackUrl: "/model",
               });
             })

@@ -15,12 +15,12 @@ const literata = Literata({
 
 export const metadata: Metadata = {
   title: {
-    default: "Aussies First Home",
-    template: "%s | Aussies First Home",
+    default: "First Aussie Home",
+    template: "%s | First Aussie Home",
   },
   description:
-    "Aussies First Home is a guided Australian first-home quiz and cost explorer for early-career buyers, built for factual education and scenario modelling only.",
-  applicationName: "Aussies First Home",
+    "First Aussie Home is a guided Australian first-home quiz and cost explorer for early-career buyers, built for factual education and scenario modelling only.",
+  applicationName: "First Aussie Home",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://aussies-first-home.local"),
 };
 
