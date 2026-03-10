@@ -94,6 +94,55 @@ export type HomeownerEligibilityState = {
   tone: "positive" | "neutral" | "negative";
 };
 
+export type HomeownerPropertyTypeDetailed =
+  | "established-home"
+  | "new-home"
+  | "vacant-land"
+  | "off-the-plan-home"
+  | "house-and-land-package";
+
+export type HomeownerBuyerEntityType =
+  | "individuals"
+  | "trust"
+  | "company"
+  | "smsf"
+  | "corporate-trustee";
+
+export type HomeownerForeignOwnershipMode = "full" | "partial";
+
+export type HomeownerWaRegion = "perth-peel" | "outside-perth-peel";
+
+export type HomeownerQldConcessionPath =
+  | "home-concession"
+  | "first-home-home-concession"
+  | "first-home-vacant-land-concession"
+  | "no-concession-path";
+
+export type HomeownerSaReliefPath =
+  | "new-home"
+  | "off-the-plan-apartment"
+  | "vacant-land"
+  | "none";
+
+export type DutyTier2FieldId =
+  | "buyerEntityType"
+  | "jointEligibilityAligned"
+  | "foreignOwnershipMode"
+  | "waRegion"
+  | "qldConcessionPath"
+  | "saReliefPath"
+  | "dependentChildrenCount"
+  | "ntHouseAndLandEligiblePath";
+
+export type DutyIntakeState = {
+  needsTier2: boolean;
+  visibleTier2Fields: DutyTier2FieldId[];
+  tier2Complete: boolean;
+  hasTier3EdgeCase: boolean;
+  uncertaintyActive: boolean;
+  reasons: string[];
+};
+
 export type HomeownerPathwayInput = {
   firstHomeBuyer: boolean;
   livingInNsw: boolean;
@@ -102,12 +151,24 @@ export type HomeownerPathwayInput = {
   buyingNewHome: boolean;
   australianCitizenOrResident: boolean;
   buyingSoloOrJoint: "solo" | "joint";
+  ownerOccupier?: boolean;
+  foreignBuyer?: boolean;
+  propertyTypeDetailed?: HomeownerPropertyTypeDetailed;
+  dependentChildrenCount?: number;
+  buyerEntityType?: HomeownerBuyerEntityType;
+  jointEligibilityAligned?: boolean;
+  foreignOwnershipMode?: HomeownerForeignOwnershipMode;
+  waRegion?: HomeownerWaRegion;
+  qldConcessionPath?: HomeownerQldConcessionPath;
+  saReliefPath?: HomeownerSaReliefPath;
+  ntHouseAndLandEligiblePath?: boolean;
   paygOnly: boolean;
   dependants: boolean;
   businessIncome: boolean;
   existingProperty: boolean;
   age: number;
   annualSalary: number;
+  actHouseholdIncome: number;
   privateDebt: number;
   hecsDebt: number;
   currentSavings: number;
@@ -151,7 +212,7 @@ export type PathwayScenarioOption = {
 export type SchemeSidebarStatus = {
   id: "stamp-duty" | "guarantee" | "help-to-buy" | "fhss";
   label: string;
-  state: "active" | "available" | "inactive" | "watch";
+  state: "active" | "available" | "inactive" | "watch" | "neutral";
   detail: string;
   href?: string;
 };
@@ -197,6 +258,7 @@ export type HomeownerPathwayOutput = {
     glossaryTerm?: GlossaryTerm;
   }>;
   eligibility: HomeownerEligibilityState;
+  dutyIntake: DutyIntakeState;
   pathways: HomeBuyingPathwayCard[];
   schemeStatuses: SchemeSidebarStatus[];
   cashOutlayOverlay: CashOutlayOverlayModel;
@@ -499,7 +561,7 @@ export type BookmarkRecord = {
 export type QuizSubmissionRecord = {
   id: string;
   userId: string;
-  quizType: "onboarding" | "fundamentals" | "schemes";
+  quizType: "onboarding" | "fundamentals" | "schemes" | "dashboard-support";
   answers: Record<string, unknown>;
   result: Record<string, unknown>;
   createdAt: string;

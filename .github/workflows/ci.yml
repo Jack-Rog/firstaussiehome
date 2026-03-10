@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prisma:generate
+      - run: npm run validate:stamp-duty-rules
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test

@@ -11,12 +11,10 @@ type BooleanFieldKey =
   | "livingInNsw"
   | "buyingNewHome"
   | "australianCitizenOrResident"
-  | "paygOnly"
-  | "dependants"
-  | "businessIncome"
-  | "existingProperty";
+  | "existingProperty"
+  | "dependants";
 
-type TouchedMap = Record<BooleanFieldKey | "buyingSoloOrJoint", boolean>;
+type TouchedMap = Record<BooleanFieldKey, boolean>;
 
 const BOOLEAN_FIELDS: Array<{
   key: BooleanFieldKey;
@@ -30,10 +28,8 @@ const BOOLEAN_FIELDS: Array<{
   { key: "livingInNsw", label: "Buying in NSW first" },
   { key: "buyingNewHome", label: "New build" },
   { key: "australianCitizenOrResident", label: "Citizen / permanent resident" },
-  { key: "paygOnly", label: "PAYG only" },
-  { key: "dependants", label: "Dependants" },
-  { key: "businessIncome", label: "Business income" },
   { key: "existingProperty", label: "Existing property ownership" },
+  { key: "dependants", label: "Dependants" },
 ];
 
 function ChoiceButton({
@@ -68,13 +64,11 @@ export function PathwayQualitativeStep({
   input,
   touched,
   onBooleanChange,
-  onChoiceChange,
   onContinue,
 }: {
   input: HomeownerPathwayInput;
   touched: TouchedMap;
   onBooleanChange: (key: BooleanFieldKey, value: boolean) => void;
-  onChoiceChange: (value: "solo" | "joint") => void;
   onContinue: () => void;
 }) {
   const canContinue = Object.values(touched).every(Boolean);
@@ -114,25 +108,6 @@ export function PathwayQualitativeStep({
           );
         })}
 
-        <Card data-testid="qual-field-buyingSoloOrJoint" className="space-y-4 bg-white/90 p-5 md:col-span-2">
-          <span className="text-sm font-semibold">Buying solo or joint</span>
-          <div className="flex gap-2">
-            <ChoiceButton
-              active={touched.buyingSoloOrJoint && input.buyingSoloOrJoint === "solo"}
-              tone="positive"
-              onClick={() => onChoiceChange("solo")}
-            >
-              <span data-testid="qual-buyingSoloOrJoint-solo">Solo</span>
-            </ChoiceButton>
-            <ChoiceButton
-              active={touched.buyingSoloOrJoint && input.buyingSoloOrJoint === "joint"}
-              tone="negative"
-              onClick={() => onChoiceChange("joint")}
-            >
-              <span data-testid="qual-buyingSoloOrJoint-joint">Joint</span>
-            </ChoiceButton>
-          </div>
-        </Card>
       </div>
 
       <Button data-testid="qual-continue" type="button" onClick={onContinue} disabled={!canContinue}>

@@ -18,18 +18,14 @@ import type {
   HomeownerPathwayInput,
   HomeownerPathwaySelections,
 } from "@/src/lib/types";
-import { formatCurrencyInput, parseMoneyInput } from "@/src/lib/utils";
+import { formatCurrency, formatCurrencyInput, parseMoneyInput } from "@/src/lib/utils";
 
 type StepId = 1 | 2 | 3;
 
 type NumericDraft = {
-  age: string;
-  annualSalary: string;
-  privateDebt: string;
-  hecsDebt: string;
   currentSavings: string;
-  averageMonthlyExpenses: string;
   targetPropertyPrice: string;
+  actHouseholdIncome: string;
 };
 
 type QualitativeTouched = {
@@ -37,14 +33,14 @@ type QualitativeTouched = {
   livingInNsw: boolean;
   buyingNewHome: boolean;
   australianCitizenOrResident: boolean;
-  buyingSoloOrJoint: boolean;
-  paygOnly: boolean;
-  dependants: boolean;
-  businessIncome: boolean;
   existingProperty: boolean;
+  dependants: boolean;
 };
 
 const STORAGE_KEY = "aussiesfirsthome:homeowner-pathway-flow";
+const TARGET_PRICE_SLIDER_MIN = 200000;
+const TARGET_PRICE_SLIDER_MAX = 2500000;
+const TARGET_PRICE_SLIDER_STEP = 5000;
 
 function getInitialTouched(allTouched: boolean): QualitativeTouched {
   return {
@@ -52,23 +48,16 @@ function getInitialTouched(allTouched: boolean): QualitativeTouched {
     livingInNsw: allTouched,
     buyingNewHome: allTouched,
     australianCitizenOrResident: allTouched,
-    buyingSoloOrJoint: allTouched,
-    paygOnly: allTouched,
-    dependants: allTouched,
-    businessIncome: allTouched,
     existingProperty: allTouched,
+    dependants: allTouched,
   };
 }
 
 function toNumericDraft(input: HomeownerPathwayInput): NumericDraft {
   return {
-    age: String(input.age),
-    annualSalary: formatCurrencyInput(input.annualSalary),
-    privateDebt: formatCurrencyInput(input.privateDebt),
-    hecsDebt: formatCurrencyInput(input.hecsDebt),
     currentSavings: formatCurrencyInput(input.currentSavings),
-    averageMonthlyExpenses: formatCurrencyInput(input.averageMonthlyExpenses),
     targetPropertyPrice: formatCurrencyInput(input.targetPropertyPrice),
+    actHouseholdIncome: formatCurrencyInput(input.actHouseholdIncome),
   };
 }
 
@@ -221,10 +210,8 @@ export function HomeownerPathwayFlow({
       | "livingInNsw"
       | "buyingNewHome"
       | "australianCitizenOrResident"
-      | "paygOnly"
-      | "dependants"
-      | "businessIncome"
-      | "existingProperty",
+      | "existingProperty"
+      | "dependants",
     value: boolean,
   ) {
     setInput((current) => ({
@@ -240,27 +227,13 @@ export function HomeownerPathwayFlow({
     }));
   }
 
-  function updateChoiceField(value: "solo" | "joint") {
-    setInput((current) => ({
-      ...current,
-      buyingSoloOrJoint: value,
-    }));
-
-    setQualitativeTouched((current) => ({
-      ...current,
-      buyingSoloOrJoint: true,
-    }));
-  }
-
   function updateNumericDraft(key: keyof NumericDraft, raw: string) {
-    const sanitized = key === "age" ? raw.replace(/[^0-9]/g, "") : raw;
-
     setNumericDraft((current) => ({
       ...current,
-      [key]: sanitized,
+      [key]: raw,
     }));
 
-    const nextValue = key === "age" ? Number(sanitized || "0") : parseMoneyInput(sanitized);
+    const nextValue = parseMoneyInput(raw);
 
     setInput((current) => ({
       ...current,
@@ -270,23 +243,35 @@ export function HomeownerPathwayFlow({
 
   function formatNumericField(key: keyof NumericDraft) {
     const nextValue =
-      key === "age"
-        ? String(input.age)
-        : key === "annualSalary"
-          ? formatCurrencyInput(input.annualSalary)
-          : key === "privateDebt"
-            ? formatCurrencyInput(input.privateDebt)
-            : key === "hecsDebt"
-              ? formatCurrencyInput(input.hecsDebt)
-              : key === "currentSavings"
-                ? formatCurrencyInput(input.currentSavings)
-                : key === "averageMonthlyExpenses"
-                  ? formatCurrencyInput(input.averageMonthlyExpenses)
-                  : formatCurrencyInput(input.targetPropertyPrice);
+      key === "currentSavings"
+        ? formatCurrencyInput(input.currentSavings)
+        : key === "targetPropertyPrice"
+          ? formatCurrencyInput(input.targetPropertyPrice)
+          : formatCurrencyInput(input.actHouseholdIncome);
 
     setNumericDraft((current) => ({
       ...current,
       [key]: nextValue,
+    }));
+  }
+
+  function updateTargetPriceSlider(raw: string) {
+    const parsed = Number(raw);
+
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+
+    const clamped = Math.min(TARGET_PRICE_SLIDER_MAX, Math.max(TARGET_PRICE_SLIDER_MIN, parsed));
+    const formatted = formatCurrencyInput(clamped);
+
+    setNumericDraft((current) => ({
+      ...current,
+      targetPropertyPrice: formatted,
+    }));
+    setInput((current) => ({
+      ...current,
+      targetPropertyPrice: clamped,
     }));
   }
 
@@ -358,10 +343,8 @@ export function HomeownerPathwayFlow({
             ["NSW", input.livingInNsw, "livingInNsw"],
             ["New build", input.buyingNewHome, "buyingNewHome"],
             ["Resident", input.australianCitizenOrResident, "australianCitizenOrResident"],
-            ["PAYG", input.paygOnly, "paygOnly"],
-            ["Dependants", input.dependants, "dependants"],
-            ["Business", input.businessIncome, "businessIncome"],
             ["Property", input.existingProperty, "existingProperty"],
+            ["Dependants", input.dependants, "dependants"],
           ].map(([label, value, key]) => (
             <button
               key={`compact-${String(key)}`}
@@ -376,10 +359,8 @@ export function HomeownerPathwayFlow({
                     | "livingInNsw"
                     | "buyingNewHome"
                     | "australianCitizenOrResident"
-                    | "paygOnly"
-                    | "dependants"
-                    | "businessIncome"
-                    | "existingProperty",
+                    | "existingProperty"
+                    | "dependants",
                   !Boolean(value),
                 )
               }
@@ -387,9 +368,6 @@ export function HomeownerPathwayFlow({
               {label}
             </button>
           ))}
-          <div className="rounded-2xl bg-surface p-3 text-sm font-semibold text-foreground">
-            {input.buyingSoloOrJoint === "solo" ? "Solo" : "Joint"}
-          </div>
         </div>
       ) : null}
 
@@ -397,13 +375,9 @@ export function HomeownerPathwayFlow({
         <div className="grid gap-3 md:grid-cols-2">
           {(
             [
-              ["age", "Age"],
-              ["annualSalary", "Annual salary"],
-              ["privateDebt", "Private debt"],
-              ["hecsDebt", "HECS / HELP"],
               ["currentSavings", "Current savings"],
-              ["averageMonthlyExpenses", "Monthly expenses"],
               ["targetPropertyPrice", "Desired property price"],
+              ["actHouseholdIncome", "Household income (previous FY)"],
             ] as const
           ).map(([key, label]) => (
             <label key={`compact-${key}`} className="grid gap-2 text-sm font-semibold">
@@ -417,6 +391,29 @@ export function HomeownerPathwayFlow({
               />
             </label>
           ))}
+          <div className="md:col-span-2 rounded-xl border border-border bg-surface p-3">
+            <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground-soft">
+              <span>{formatCurrency(TARGET_PRICE_SLIDER_MIN)}</span>
+              <span>Slide property value</span>
+              <span>{formatCurrency(TARGET_PRICE_SLIDER_MAX)}</span>
+            </div>
+            <input
+              data-testid="pathway-targetPropertyPrice-slider"
+              type="range"
+              min={TARGET_PRICE_SLIDER_MIN}
+              max={TARGET_PRICE_SLIDER_MAX}
+              step={TARGET_PRICE_SLIDER_STEP}
+              value={Math.min(
+                TARGET_PRICE_SLIDER_MAX,
+                Math.max(
+                  TARGET_PRICE_SLIDER_MIN,
+                  Number(numericDraft.targetPropertyPrice.replace(/[^0-9]/g, "") || TARGET_PRICE_SLIDER_MIN),
+                ),
+              )}
+              onChange={(event) => updateTargetPriceSlider(event.currentTarget.value)}
+              className="mt-3 w-full accent-primary"
+            />
+          </div>
         </div>
       ) : null}
     </Card>
@@ -431,7 +428,6 @@ export function HomeownerPathwayFlow({
           input={input}
           touched={qualitativeTouched}
           onBooleanChange={updateBooleanField}
-          onChoiceChange={updateChoiceField}
           onContinue={advanceToNumbers}
         />
       ) : null}

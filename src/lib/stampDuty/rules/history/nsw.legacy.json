@@ -1,0 +1,154 @@
+{
+  "jurisdiction": "NSW",
+  "ruleset_version": "legacy-inline.nsw.v1",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false }
+  ],
+  "official_sources": [
+    {
+      "id": "nsw-transfer-duty-legacy",
+      "label": "Revenue NSW transfer duty",
+      "url": "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty",
+      "last_verified": "2026-03-03",
+      "notes": "Legacy extracted inline model"
+    },
+    {
+      "id": "nsw-fhbas-legacy",
+      "label": "Revenue NSW First Home Buyers Assistance Scheme",
+      "url": "https://www.revenue.nsw.gov.au/grants-schemes/first-home-buyer",
+      "last_verified": "2026-03-03",
+      "notes": "Legacy extracted inline model"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "nsw_general_inline_legacy_until_2026_03_02",
+      "effective_from": "1900-01-01",
+      "effective_to": "2026-03-02",
+      "priority": 10,
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 17000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.0125
+        },
+        {
+          "min_value": 17000.01,
+          "max_value": 36000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 212,
+          "rate_per_100": 1.5,
+          "marginal_base_value": 17000
+        },
+        {
+          "min_value": 36000.01,
+          "max_value": 97000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 497,
+          "rate_per_100": 1.75,
+          "marginal_base_value": 36000
+        },
+        {
+          "min_value": 97000.01,
+          "max_value": 364000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 1564,
+          "rate_per_100": 3.5,
+          "marginal_base_value": 97000
+        },
+        {
+          "min_value": 364000.01,
+          "max_value": 1212000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 10909,
+          "rate_per_100": 4.5,
+          "marginal_base_value": 364000
+        },
+        {
+          "min_value": 1212000.01,
+          "max_value": null,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 49149,
+          "rate_per_100": 5.5,
+          "marginal_base_value": 1212000
+        }
+      ],
+      "source_refs": ["nsw-transfer-duty-legacy"]
+    }
+  ],
+  "concessions": [
+    {
+      "id": "nsw_fhbas_broad_model_legacy_until_2026_03_02",
+      "name": "NSW first-home broad relief model (legacy)",
+      "effective_from": "1900-01-01",
+      "effective_to": "2026-03-02",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 0,
+          "max_value": 800000,
+          "effect_formula_type": "zero"
+        },
+        {
+          "min_value": 800000.01,
+          "max_value": 999999.99,
+          "effect_formula_type": "fixed_plus_marginal",
+          "fixed_amount": 0,
+          "rate_per_100": 19.706,
+          "marginal_base_value": 800000
+        },
+        {
+          "min_value": 1000000,
+          "max_value": null,
+          "effect_formula_type": "informational_only"
+        }
+      ],
+      "source_refs": ["nsw-fhbas-legacy"],
+      "notes": ["Extracted from legacy inline calculator functions before rules-engine migration."]
+    }
+  ],
+  "surcharges": [],
+  "notes": [
+    "Historical rules extracted from inline code for deterministic backdated calculations.",
+    "Legacy rules are formula-identical to current source-dated logic in this migration step."
+  ]
+}

@@ -1,0 +1,270 @@
+{
+  "jurisdiction": "ACT",
+  "ruleset_version": "2026-03-10.act.v3",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs.act_hbcs_income_eligible",
+      "type": "boolean",
+      "required": false,
+      "description": "Set true when household income satisfies ACT Home Buyer Concession Scheme eligibility."
+    },
+    {
+      "key": "state_specific_inputs.act_household_income",
+      "type": "number",
+      "required": false,
+      "description": "Household prior-financial-year income amount supplied by the scenario."
+    },
+    {
+      "key": "state_specific_inputs.act_hbcs_income_threshold",
+      "type": "number",
+      "required": false,
+      "description": "Income threshold used to determine ACT HBCS income eligibility."
+    },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Reserved for future ACT-specific parameters."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "act-conveyance-duty",
+      "label": "ACT Revenue Office conveyance duty rates",
+      "url": "https://www.revenue.act.gov.au/duties/conveyance-duty",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "act-home-buyer-concession",
+      "label": "ACT home buyer concession scheme",
+      "url": "https://www.revenue.act.gov.au/home-buyer-assistance/home-buyer-concession-scheme",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "act-foreign-duty-hook",
+      "label": "ACT duties reference for foreign purchaser surcharge checks",
+      "url": "https://www.revenue.act.gov.au/duties",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "act_owner_occupier_2025_07_01",
+      "effective_from": "2025-07-01",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [{ "field": "owner_occupier", "op": "eq", "value": true }]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 260000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.0028
+        },
+        {
+          "min_value": 260000.01,
+          "max_value": 300000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 728,
+          "rate_per_100": 2.2,
+          "marginal_base_value": 260000
+        },
+        {
+          "min_value": 300000.01,
+          "max_value": 500000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 1608,
+          "rate_per_100": 3.4,
+          "marginal_base_value": 300000
+        },
+        {
+          "min_value": 500000.01,
+          "max_value": 750000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 8408,
+          "rate_per_100": 4.32,
+          "marginal_base_value": 500000
+        },
+        {
+          "min_value": 750000.01,
+          "max_value": 1000000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 19208,
+          "rate_per_100": 5.9,
+          "marginal_base_value": 750000
+        },
+        {
+          "min_value": 1000000.01,
+          "max_value": 1455000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 33958,
+          "rate_per_100": 6.6,
+          "marginal_base_value": 1000000
+        },
+        {
+          "min_value": 1455000.01,
+          "max_value": null,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.0454
+        }
+      ],
+      "source_refs": ["act-conveyance-duty"]
+    },
+    {
+      "id": "act_non_owner_occupier_2025_07_01",
+      "effective_from": "2025-07-01",
+      "effective_to": null,
+      "priority": 20,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [{ "field": "owner_occupier", "op": "eq", "value": false }]
+      },
+      "calculation_method": "formula_piecewise",
+      "rounding": "none",
+      "formula_segments": [
+        {
+          "min_value": 0,
+          "max_value": 1428.57,
+          "expression": "20"
+        },
+        {
+          "min_value": 1428.570001,
+          "max_value": 200000,
+          "expression": "value * 0.014"
+        },
+        {
+          "min_value": 200000.01,
+          "max_value": 300000,
+          "expression": "2800 + ((value - 200000) / 100) * 2.2"
+        },
+        {
+          "min_value": 300000.01,
+          "max_value": 500000,
+          "expression": "5000 + ((value - 300000) / 100) * 3.4"
+        },
+        {
+          "min_value": 500000.01,
+          "max_value": 750000,
+          "expression": "11800 + ((value - 500000) / 100) * 4.32"
+        },
+        {
+          "min_value": 750000.01,
+          "max_value": 1000000,
+          "expression": "22600 + ((value - 750000) / 100) * 5.9"
+        },
+        {
+          "min_value": 1000000.01,
+          "max_value": 1455000,
+          "expression": "37350 + ((value - 1000000) / 100) * 6.6"
+        },
+        {
+          "min_value": 1455000.01,
+          "max_value": null,
+          "expression": "value * 0.0454"
+        }
+      ],
+      "source_refs": ["act-conveyance-duty"]
+    },
+    {
+      "id": "act_historical_unresolved_before_2025_07_01",
+      "effective_from": "1900-01-01",
+      "effective_to": "2025-06-30",
+      "priority": 100,
+      "calculation_method": "unresolved",
+      "fallback_url": "https://www.revenue.act.gov.au/duties/conveyance-duty",
+      "source_refs": ["act-conveyance-duty"],
+      "unresolved_reason": "Historical ACT conveyance duty rates before 1 July 2025 are not yet versioned.",
+      "todo": "Backfill prior-year ACT owner-occupier and non-owner rates."
+    }
+  ],
+  "concessions": [
+    {
+      "id": "act_home_buyer_concession_scheme_2025_07_01",
+      "name": "ACT home buyer concession scheme",
+      "effective_from": "2025-07-01",
+      "effective_to": null,
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "state_specific_inputs.act_hbcs_income_eligible", "op": "eq", "value": true }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 0,
+          "max_value": 1020000,
+          "effect_formula_type": "zero"
+        },
+        {
+          "min_value": 1020000.01,
+          "max_value": 1455000,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.ceil((value - 1020000) / 100) * 6.4"
+        },
+        {
+          "min_value": 1455000.01,
+          "max_value": null,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.max((value * 0.0454) - 35238, 0)"
+        }
+      ],
+      "source_refs": ["act-home-buyer-concession"],
+      "notes": [
+        "ACT scheme eligibility is income-tested and household-specific; this rule applies only when state_specific_inputs.act_hbcs_income_eligible is true.",
+        "Concession math uses ACT Revenue Office rates for transactions from 1 July 2025."
+      ]
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "act_foreign_buyer_surcharge_hook_2025_07_01",
+      "name": "ACT conveyance foreign buyer surcharge hook",
+      "effective_from": "2025-07-01",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [{ "field": "foreign_buyer", "op": "eq", "value": true }]
+      },
+      "calculation_method": "unresolved",
+      "fallback_url": "https://www.revenue.act.gov.au/duties",
+      "source_refs": ["act-foreign-duty-hook"],
+      "notes": [
+        "No explicit conveyance foreign purchaser surcharge formula is currently encoded.",
+        "Retained as a hook pending confirmed duty-rate source material."
+      ]
+    }
+  ],
+  "notes": [
+    "ACT 1 July 2025 owner-occupier and non-owner conveyance duty rates are encoded from ACT Revenue Office tables.",
+    "ACT home buyer concession scheme math is encoded for transactions from 1 July 2025 when income eligibility is explicitly supplied.",
+    "Income eligibility is expected to be computed by the caller using ACT threshold settings in effect from 1 July 2024."
+  ]
+}

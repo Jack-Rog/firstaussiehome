@@ -1,0 +1,200 @@
+{
+  "jurisdiction": "NT",
+  "ruleset_version": "2026-03-10.nt.v2",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Reserved for future NT-specific parameters."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "nt-conveyance-calculator",
+      "label": "NT land or property transfer stamp duty calculator",
+      "url": "https://nt.gov.au/property/buying-and-selling-a-home/settle-the-sale/stamp-duty-buying-or-selling-a-home/conveyance-calculator",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "nt-calculators-js",
+      "label": "NT calculator implementation script",
+      "url": "https://nt.gov.au/property/home-owner-assistance/js/calculators.js",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "nt-stamp-duty",
+      "label": "NT stamp duty information",
+      "url": "https://nt.gov.au/employ/money-and-taxes/taxes-royalties-and-grants/stamp-duty",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "nt_general_2017_07_01",
+      "effective_from": "2017-07-01",
+      "effective_to": null,
+      "priority": 10,
+      "calculation_method": "formula_piecewise",
+      "rounding": "floor_to_5_cents",
+      "formula_segments": [
+        {
+          "min_value": 0,
+          "max_value": 525000,
+          "expression": "(0.06571441 * Math.pow(value / 1000, 2)) + (15 * (value / 1000))"
+        },
+        {
+          "min_value": 525000.01,
+          "max_value": 2999999.99,
+          "expression": "0.0495 * value"
+        },
+        {
+          "min_value": 3000000,
+          "max_value": 4999999.99,
+          "expression": "0.0575 * value"
+        },
+        {
+          "min_value": 5000000,
+          "max_value": null,
+          "expression": "0.0595 * value"
+        }
+      ],
+      "source_refs": ["nt-calculators-js", "nt-conveyance-calculator"]
+    },
+    {
+      "id": "nt_general_2011_07_01",
+      "effective_from": "2011-07-01",
+      "effective_to": "2017-06-30",
+      "priority": 10,
+      "calculation_method": "formula_piecewise",
+      "rounding": "floor_to_5_cents",
+      "formula_segments": [
+        {
+          "min_value": 0,
+          "max_value": 525000,
+          "expression": "(0.06571441 * Math.pow(value / 1000, 2)) + (15 * (value / 1000))"
+        },
+        {
+          "min_value": 525000.01,
+          "max_value": 2999999.99,
+          "expression": "0.0495 * value"
+        },
+        {
+          "min_value": 3000000,
+          "max_value": null,
+          "expression": "0.0545 * value"
+        }
+      ],
+      "source_refs": ["nt-calculators-js", "nt-conveyance-calculator"]
+    },
+    {
+      "id": "nt_general_2008_06_05",
+      "effective_from": "2008-06-05",
+      "effective_to": "2011-06-30",
+      "priority": 10,
+      "calculation_method": "formula_piecewise",
+      "rounding": "floor_to_5_cents",
+      "formula_segments": [
+        {
+          "min_value": 0,
+          "max_value": 525000,
+          "expression": "(0.06571441 * Math.pow(value / 1000, 2)) + (15 * (value / 1000))"
+        },
+        {
+          "min_value": 525000.01,
+          "max_value": null,
+          "expression": "0.0495 * value"
+        }
+      ],
+      "source_refs": ["nt-calculators-js", "nt-conveyance-calculator"]
+    },
+    {
+      "id": "nt_general_original_pre_2008_06_05",
+      "effective_from": "1900-01-01",
+      "effective_to": "2008-06-04",
+      "priority": 10,
+      "calculation_method": "formula_piecewise",
+      "rounding": "floor_to_5_cents",
+      "formula_segments": [
+        {
+          "min_value": 0,
+          "max_value": 500000,
+          "expression": "(0.065 * Math.pow(value / 1000, 2)) + (21 * (value / 1000))"
+        },
+        {
+          "min_value": 500000.01,
+          "max_value": null,
+          "expression": "0.054 * value"
+        }
+      ],
+      "source_refs": ["nt-calculators-js", "nt-conveyance-calculator"]
+    }
+  ],
+  "concessions": [
+    {
+      "id": "nt_first_home_house_and_land_exemption_2022_07_01",
+      "name": "NT first-home house and land package duty exemption",
+      "effective_from": "2022-07-01",
+      "effective_to": "2027-06-30",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "house_and_land_package" }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["nt-conveyance-calculator", "nt-stamp-duty"],
+      "notes": [
+        "NT HomeGrown Territory provides a full stamp duty exemption for eligible first-home house and land packages signed from 1 July 2022 to 30 June 2027.",
+        "No broad NT first-home concession is applied to established homes in this ruleset."
+      ]
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "nt_foreign_buyer_surcharge_hook_2026_03_10",
+      "name": "NT foreign buyer surcharge hook",
+      "effective_from": "2026-03-10",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [{ "field": "foreign_buyer", "op": "eq", "value": true }]
+      },
+      "calculation_method": "unresolved",
+      "fallback_url": "https://nt.gov.au/employ/money-and-taxes/taxes-royalties-and-grants/stamp-duty",
+      "source_refs": ["nt-stamp-duty"],
+      "notes": [
+        "No confirmed NT foreign purchaser surcharge formula is currently encoded.",
+        "Retained as a hook for future legislative extraction."
+      ]
+    }
+  ],
+  "notes": [
+    "NT base duty formulas and date cutovers are encoded from the official NT calculator script.",
+    "NT applies floor-to-nearest-5-cents rounding for conveyance calculations, matching official calculator behaviour.",
+    "NT first-home house-and-land exemption is encoded for the 1 July 2022 to 30 June 2027 period.",
+    "Foreign-buyer surcharge treatment remains an unresolved hook pending confirmed NT source extraction."
+  ]
+}

@@ -9,15 +9,15 @@ import {
   CircleAlert,
   ExternalLink,
   Home,
-  Landmark,
-  PiggyBank,
   UserRound,
-  Wallet,
   XCircle,
 } from "lucide-react";
 import { useDisclosure } from "@/components/compliance/disclosure-context";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  getSavedDutyTier2FieldIds,
+} from "@/src/lib/analysis/homeowner-duty-intake";
 import {
   buildHomeownerPathwayOutput,
   CURRENT_MARKET_OWNER_OCCUPIER_RATE,
@@ -29,29 +29,24 @@ import {
   type HomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
 import { REFERENCE_LINKS } from "@/src/lib/references";
-import type { HomeownerPathwayInput, HomeownerPathwaySelections, PathwayScenarioOption } from "@/src/lib/types";
+import type { HomeownerPathwayInput, HomeownerPathwaySelections } from "@/src/lib/types";
 import {
-  annualiseAmount,
   formatCurrency,
   formatCurrencyInput,
-  fromAnnualAmount,
   fromMonthlyAmount,
-  monthlyiseAmount,
   parseMoneyInput,
   type Frequency,
 } from "@/src/lib/utils";
 
 type DisplayDraft = {
-  age: string;
-  annualSalary: string;
-  privateDebt: string;
-  hecsDebt: string;
   currentSavings: string;
-  averageMonthlyExpenses: string;
   targetPropertyPrice: string;
+  actHouseholdIncome: string;
+  dependentChildrenCount: string;
 };
 
-type DashboardSection = "scenario" | "deposit" | "cost" | "next";
+type DashboardSection = "scenario" | "cost";
+type ResponseTab = "basic" | "advanced";
 
 const HOME_STATE_OPTIONS: Array<{
   value: NonNullable<HomeownerPathwayInput["homeState"]>;
@@ -66,6 +61,28 @@ const HOME_STATE_OPTIONS: Array<{
   { value: "act", label: "ACT" },
   { value: "nt", label: "NT" },
 ];
+
+const PROPERTY_TYPE_OPTIONS: Array<{
+  value: NonNullable<HomeownerPathwayInput["propertyTypeDetailed"]>;
+  label: string;
+}> = [
+  { value: "established-home", label: "Established" },
+  { value: "new-home", label: "New" },
+  { value: "vacant-land", label: "Vacant land" },
+  { value: "off-the-plan-home", label: "Off-the-plan" },
+  { value: "house-and-land-package", label: "House-and-land" },
+];
+
+const ADVANCED_FIELD_LABELS: Record<string, string> = {
+  buyerEntityType: "Buyer entity type",
+  jointEligibilityAligned: "Joint profile alignment",
+  foreignOwnershipMode: "Foreign ownership split",
+  waRegion: "WA region",
+  qldConcessionPath: "Queensland path",
+  saReliefPath: "South Australia relief path",
+  dependentChildrenCount: "Dependant children",
+  ntHouseAndLandEligiblePath: "NT targeted exemption path",
+};
 
 const SCHEME_BLOG_SLUG_BY_ID: Record<string, string> = {
   "stamp-duty": "nsw-fhbas-concept",
@@ -86,6 +103,9 @@ const SETUP_COST_HINTS: Record<string, string> = {
   "upfront-pexa":
     "Electronic settlement platform fee for processing settlement.",
 };
+const PROPERTY_PRICE_SLIDER_MIN = 0;
+const PROPERTY_PRICE_SLIDER_MAX = 2000000;
+const PROPERTY_PRICE_SLIDER_STEP = 5000;
 
 function resolveHomeState(partial?: Partial<HomeownerPathwayInput>) {
   if (partial?.homeState) {
@@ -101,17 +121,13 @@ function resolveHomeState(partial?: Partial<HomeownerPathwayInput>) {
 
 function toDisplayDraft(
   input: HomeownerPathwayInput,
-  incomeFrequency: Frequency,
-  expenseFrequency: Frequency,
 ): DisplayDraft {
   return {
-    age: String(input.age),
-    annualSalary: formatCurrencyInput(fromAnnualAmount(input.annualSalary, incomeFrequency)),
-    privateDebt: formatCurrencyInput(input.privateDebt),
-    hecsDebt: formatCurrencyInput(input.hecsDebt),
     currentSavings: formatCurrencyInput(input.currentSavings),
-    averageMonthlyExpenses: formatCurrencyInput(fromMonthlyAmount(input.averageMonthlyExpenses, expenseFrequency)),
     targetPropertyPrice: formatCurrencyInput(input.targetPropertyPrice),
+    actHouseholdIncome: formatCurrencyInput(input.actHouseholdIncome),
+    dependentChildrenCount:
+      input.dependentChildrenCount === undefined ? "" : String(input.dependentChildrenCount),
   };
 }
 
@@ -191,19 +207,7 @@ function compactBooleanClass(active: boolean) {
     : "border-danger/25 bg-[#f9ecef] text-[#922b41]";
 }
 
-function scenarioButtonClass(scenario: PathwayScenarioOption, selected: boolean) {
-  if (!scenario.available) {
-    return "cursor-not-allowed border-border bg-[#efede8] text-foreground-soft opacity-80";
-  }
-
-  if (selected) {
-    return "border-primary bg-primary text-white shadow-[0_10px_24px_rgba(74,124,89,0.32)]";
-  }
-
-  return "border-border bg-white text-foreground hover:border-primary/35";
-}
-
-function schemePillClass(state: "active" | "available" | "inactive" | "watch") {
+function schemePillClass(state: "active" | "available" | "inactive" | "watch" | "neutral") {
   if (state === "active") {
     return "border-primary/30 bg-primary-soft text-primary-strong";
   }
@@ -214,6 +218,10 @@ function schemePillClass(state: "active" | "available" | "inactive" | "watch") {
 
   if (state === "watch") {
     return "border-[#d2bda2] bg-[#fbf4e8] text-[#6b5230]";
+  }
+
+  if (state === "neutral") {
+    return "border-border bg-[#f1f0ec] text-foreground-soft";
   }
 
   return "border-danger/25 bg-[#f8edf0] text-[#8a2f2f]";
@@ -234,14 +242,6 @@ function amortizedMonthlyRepayment(principal: number, annualRate: number, termYe
   return (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -periods));
 }
 
-function frequencyLabel(frequency: Frequency) {
-  if (frequency === "annually") {
-    return "annual";
-  }
-
-  return frequency;
-}
-
 function signedCurrency(value: number, sign: "+" | "-" | "=") {
   if (sign === "=") {
     return formatCurrency(value);
@@ -254,31 +254,18 @@ function updateInputFromDisplay(
   current: HomeownerPathwayInput,
   key: keyof DisplayDraft,
   raw: string,
-  incomeFrequency: Frequency,
-  expenseFrequency: Frequency,
 ) {
-  if (key === "age") {
+  if (key === "dependentChildrenCount") {
+    const count = raw.trim().length === 0 ? undefined : Number(raw.replace(/[^\d]/g, ""));
+
     return {
       ...current,
-      age: Number(raw.replace(/[^0-9]/g, "") || "0"),
+      dependentChildrenCount: count,
+      dependants: (count ?? 0) > 0,
     };
   }
 
   const parsed = parseMoneyInput(raw);
-
-  if (key === "annualSalary") {
-    return {
-      ...current,
-      annualSalary: annualiseAmount(parsed, incomeFrequency),
-    };
-  }
-
-  if (key === "averageMonthlyExpenses") {
-    return {
-      ...current,
-      averageMonthlyExpenses: monthlyiseAmount(parsed, expenseFrequency),
-    };
-  }
 
   return {
     ...current,
@@ -286,7 +273,7 @@ function updateInputFromDisplay(
   };
 }
 
-function requirementLabelForScenario(scenario: PathwayScenarioOption) {
+function requirementLabelForScenario(scenario: { id: string }) {
   if (scenario.id === "guarantee-5") {
     return "Needs First Home Guarantee";
   }
@@ -340,21 +327,22 @@ export function FirstHomeDashboard({
   const { setDisclosure } = useDisclosure();
   const [input, setInput] = useState<HomeownerPathwayInput>(initialState.input);
   const [selections, setSelections] = useState<HomeownerPathwaySelections>(initialState.selections);
-  const [incomeFrequency, setIncomeFrequency] = useState<Frequency>(initialState.incomeFrequency);
-  const [expenseFrequency, setExpenseFrequency] = useState<Frequency>(initialState.expenseFrequency);
+  const [incomeFrequency] = useState<Frequency>(initialState.incomeFrequency);
+  const [expenseFrequency] = useState<Frequency>(initialState.expenseFrequency);
   const [accountName] = useState(initialState.accountName);
   const [display, setDisplay] = useState<DisplayDraft>(
-    toDisplayDraft(initialState.input, initialState.incomeFrequency, initialState.expenseFrequency),
+    toDisplayDraft(initialState.input),
   );
+  const [responseTab, setResponseTab] = useState<ResponseTab>("basic");
   const [openSections, setOpenSections] = useState<Record<DashboardSection, boolean>>({
     scenario: true,
-    deposit: true,
     cost: true,
-    next: true,
   });
   const [schemePanelOpen, setSchemePanelOpen] = useState(true);
   const [schemeDetailOpen, setSchemeDetailOpen] = useState<Partial<Record<string, boolean>>>({});
+  const [mobileSchemePopupId, setMobileSchemePopupId] = useState<string | null>(null);
   const [setupCostsOpen, setSetupCostsOpen] = useState(false);
+  const [bannerCollapsed, setBannerCollapsed] = useState(false);
 
   const withSchemes = useMemo(
     () =>
@@ -375,6 +363,14 @@ export function FirstHomeDashboard({
       }),
     [input, selections],
   );
+  const dutyIntake = withSchemes.dutyIntake;
+  const savedAdvancedFieldIds = useMemo(() => getSavedDutyTier2FieldIds(input), [input]);
+  const advancedFieldIds = useMemo(
+    () => [...new Set([...dutyIntake.visibleTier2Fields, ...savedAdvancedFieldIds])],
+    [dutyIntake.visibleTier2Fields, savedAdvancedFieldIds],
+  );
+  const showAdvancedTab = dutyIntake.needsTier2 || savedAdvancedFieldIds.length > 0;
+  const dutyOutputsUncertain = dutyIntake.uncertaintyActive;
 
   useEffect(() => {
     setDisclosure({
@@ -415,21 +411,32 @@ export function FirstHomeDashboard({
     };
   }, [accountName, expenseFrequency, incomeFrequency, input, selections]);
 
+  useEffect(() => {
+    if (!showAdvancedTab && responseTab === "advanced") {
+      setResponseTab("basic");
+    }
+  }, [responseTab, showAdvancedTab]);
+
   const depositPathway = withSchemes.pathways.find((pathway) => pathway.id === "deposit");
   const upfrontCostsPathway = withSchemes.pathways.find((pathway) => pathway.id === "upfront-costs");
   const currentScenario =
     depositPathway?.scenarioOptions?.find((scenario) => scenario.id === selections.activeDepositScenario && scenario.available) ??
     depositPathway?.scenarioOptions?.find((scenario) => scenario.available) ??
     depositPathway?.scenarioOptions?.[0];
-  const currentCash = withSchemes.cashOutlayOverlay.totalBuyerCashOutlay;
+  const hasActiveScheme = withSchemes.schemeStatuses.some((scheme) => scheme.state === "active");
+  const comparisonModel = hasActiveScheme ? withSchemes : withoutSchemes;
+  const currentCash = comparisonModel.cashOutlayOverlay.totalBuyerCashOutlay;
   const baselineCash = withoutSchemes.cashOutlayOverlay.totalBuyerCashOutlay;
-  const cashDifference = Math.max(baselineCash - currentCash, 0);
-  const savingsGap = Math.max(currentCash - input.currentSavings, 0);
-  const savingsSurplus = Math.max(input.currentSavings - currentCash, 0);
+  const currentCashDisplay = dutyOutputsUncertain ? `${formatCurrency(currentCash)}*` : formatCurrency(currentCash);
+  const baselineCashDisplay = dutyOutputsUncertain ? `${formatCurrency(baselineCash)}*` : formatCurrency(baselineCash);
   const currentLvr =
     input.targetPropertyPrice > 0 && currentScenario
       ? (currentScenario.mortgageAmount / input.targetPropertyPrice) * 100
       : 0;
+  const targetPriceSliderValue = Math.min(
+    PROPERTY_PRICE_SLIDER_MAX,
+    Math.max(PROPERTY_PRICE_SLIDER_MIN, input.targetPropertyPrice || PROPERTY_PRICE_SLIDER_MIN),
+  );
   const lvrRatePenalty = currentLvr > 95 ? 0.6 : currentLvr > 80 ? 0.25 : 0;
   const displayedRate = CURRENT_MARKET_OWNER_OCCUPIER_RATE + lvrRatePenalty;
   const marketMonthlyRepayment = currentScenario
@@ -437,30 +444,25 @@ export function FirstHomeDashboard({
     : 0;
   const marketRepaymentAtExpenseFrequency = fromMonthlyAmount(marketMonthlyRepayment, expenseFrequency);
   const timeToSaveYears = currentScenario ? (currentScenario.timeToSaveMonths / 12).toFixed(1) : "0.0";
-  const currentRows = [
+  const costRows = [
     {
       label: "Home price",
       sign: "+" as const,
-      currentValue: withSchemes.cashOutlayOverlay.purchasePrice,
+      currentValue: comparisonModel.cashOutlayOverlay.purchasePrice,
       baselineValue: withoutSchemes.cashOutlayOverlay.purchasePrice,
     },
     {
       label: "Bank funding",
       sign: "-" as const,
-      currentValue: withSchemes.cashOutlayOverlay.financedAmount,
+      currentValue: comparisonModel.cashOutlayOverlay.financedAmount,
       baselineValue: withoutSchemes.cashOutlayOverlay.financedAmount,
     },
     {
-      label: "Transfer duty",
+      label: dutyOutputsUncertain ? "Stamp duty*" : "Stamp duty",
       sign: "+" as const,
-      currentValue: withSchemes.cashOutlayOverlay.stampDuty,
+      currentValue: comparisonModel.cashOutlayOverlay.stampDuty,
       baselineValue: withoutSchemes.cashOutlayOverlay.stampDuty,
-    },
-    {
-      label: "Grouped setup costs",
-      sign: "+" as const,
-      currentValue: withSchemes.cashOutlayOverlay.otherUpfrontCosts,
-      baselineValue: withoutSchemes.cashOutlayOverlay.otherUpfrontCosts,
+      uncertain: dutyOutputsUncertain,
     },
   ];
   const setupCostDetails = (upfrontCostsPathway?.metrics.filter((metric) => metric.id !== "upfront-total") ?? []).map(
@@ -487,41 +489,57 @@ export function FirstHomeDashboard({
     }));
   }
 
+  function stateDotClass(state: "active" | "available" | "inactive" | "watch" | "neutral") {
+    if (state === "active") {
+      return "bg-primary";
+    }
+    if (state === "available") {
+      return "bg-[#4a8f59]";
+    }
+    if (state === "watch") {
+      return "bg-[#b9812f]";
+    }
+    if (state === "neutral") {
+      return "bg-[#969286]";
+    }
+    return "bg-[#b3394a]";
+  }
+
   function updateDisplay(key: keyof DisplayDraft, raw: string) {
     const formatted =
-      key === "age" ? raw.replace(/[^0-9]/g, "") : raw.trim().length === 0 ? "" : formatCurrencyInput(parseMoneyInput(raw));
+      key === "dependentChildrenCount"
+        ? raw.replace(/[^\d]/g, "")
+        : raw.trim().length === 0
+          ? ""
+          : formatCurrencyInput(parseMoneyInput(raw));
 
     setDisplay((current) => ({
       ...current,
       [key]: formatted,
     }));
-    setInput((current) => updateInputFromDisplay(current, key, formatted, incomeFrequency, expenseFrequency));
+    setInput((current) => updateInputFromDisplay(current, key, formatted));
   }
 
-  function updateFrequency(kind: "income" | "expense", next: Frequency) {
-    if (kind === "income") {
-      setIncomeFrequency(next);
-      setDisplay((current) => ({
-        ...current,
-        annualSalary:
-          current.annualSalary.trim().length === 0
-            ? ""
-            : formatCurrencyInput(fromAnnualAmount(input.annualSalary, next)),
-      }));
+  function updateTargetPriceFromSlider(raw: string) {
+    const parsed = Number(raw);
+
+    if (!Number.isFinite(parsed)) {
       return;
     }
 
-    setExpenseFrequency(next);
+    const clamped = Math.min(PROPERTY_PRICE_SLIDER_MAX, Math.max(PROPERTY_PRICE_SLIDER_MIN, parsed));
+
     setDisplay((current) => ({
       ...current,
-      averageMonthlyExpenses:
-        current.averageMonthlyExpenses.trim().length === 0
-          ? ""
-          : formatCurrencyInput(fromMonthlyAmount(input.averageMonthlyExpenses, next)),
+      targetPropertyPrice: formatCurrencyInput(clamped),
+    }));
+    setInput((current) => ({
+      ...current,
+      targetPropertyPrice: clamped,
     }));
   }
 
-  const booleanControls = [
+  const basicBooleanControls = [
     {
       label: "First home",
       active: input.firstHomeBuyer,
@@ -530,25 +548,18 @@ export function FirstHomeDashboard({
         setInput((current) => ({
           ...current,
           firstHomeBuyer: !current.firstHomeBuyer,
-          existingProperty: current.firstHomeBuyer ? current.existingProperty : false,
+          existingProperty: current.firstHomeBuyer,
         })),
     },
     {
-      label: "No other property",
-      active: !input.existingProperty,
-      icon: Landmark,
+      label: "Owner occupier",
+      active: input.ownerOccupier ?? true,
+      icon: Home,
       onToggle: () =>
         setInput((current) => ({
           ...current,
-          existingProperty: !current.existingProperty,
-          firstHomeBuyer: current.existingProperty ? true : false,
+          ownerOccupier: !(current.ownerOccupier ?? true),
         })),
-    },
-    {
-      label: "Existing home",
-      active: !input.buyingNewHome,
-      icon: Home,
-      onToggle: () => setInput((current) => ({ ...current, buyingNewHome: !current.buyingNewHome })),
     },
     {
       label: "Resident",
@@ -561,28 +572,24 @@ export function FirstHomeDashboard({
         })),
     },
     {
-      label: "No dependants",
-      active: !input.dependants,
+      label: "Not foreign person",
+      active: !(input.foreignBuyer ?? false),
       icon: UserRound,
-      onToggle: () => setInput((current) => ({ ...current, dependants: !current.dependants })),
-    },
-    {
-      label: "PAYG only",
-      active: input.paygOnly,
-      icon: Wallet,
-      onToggle: () => setInput((current) => ({ ...current, paygOnly: !current.paygOnly })),
-    },
-    {
-      label: "No business / trust",
-      active: !input.businessIncome,
-      icon: PiggyBank,
-      onToggle: () => setInput((current) => ({ ...current, businessIncome: !current.businessIncome })),
+      onToggle: () =>
+        setInput((current) => {
+          const nextForeignBuyer = !(current.foreignBuyer ?? false);
+
+          return {
+            ...current,
+            foreignBuyer: nextForeignBuyer,
+            foreignOwnershipMode: nextForeignBuyer ? current.foreignOwnershipMode : undefined,
+          };
+        }),
     },
   ];
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="space-y-6 pb-20 xl:pb-0">
+    <div className="flex flex-col gap-6 pb-20 xl:pb-0">
       <section className="animate-fade-up rounded-[1.4rem] border border-border bg-[radial-gradient(circle_at_90%_16%,rgba(122,156,137,0.22),transparent_38%),linear-gradient(180deg,#ffffff,#f3f6f1)] p-6 shadow-[0_16px_38px_rgba(33,47,37,0.11)]">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Welcome back, {accountName}</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">Your first-home dashboard</h1>
@@ -597,318 +604,699 @@ export function FirstHomeDashboard({
         </div>
       </section>
 
-      <section className="animate-fade-up sticky top-[5.4rem] z-30 rounded-[1.25rem] border border-border bg-[linear-gradient(135deg,#edf5ef,#f5f2e9)] p-5 shadow-[0_14px_30px_rgba(33,47,37,0.14)]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Cost of your First Home</p>
-            <p className="mt-1 text-sm text-foreground-soft">Funds required from you</p>
-            <p data-testid="current-cash-outlay" className="mt-2 text-4xl font-semibold tracking-tight text-foreground">
-              {formatCurrency(currentCash)}
+      <div className="sticky top-[5.1rem] z-30 space-y-2 md:top-[5.4rem] md:space-y-0">
+      <div className="rounded-[1.35rem] border border-border bg-white/90 p-2 md:p-2.5 shadow-[0_10px_26px_rgba(33,47,37,0.1)]">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-strong md:text-xs">
+            Cost of your First Home
+          </p>
+          {bannerCollapsed ? (
+            <p
+              data-testid="collapsed-banner-cash-outlay"
+              className={`truncate text-sm font-semibold md:text-base ${
+                dutyOutputsUncertain ? "text-foreground-soft" : "text-foreground"
+              }`}
+            >
+              {`Cost of your First Home ${currentCashDisplay}`}
             </p>
-          </div>
-          <div className="rounded-full bg-primary/10 px-4 py-2 text-sm font-semibold text-primary-strong">
-            {formatCurrency(cashDifference)} less cash with the current setup
-          </div>
+          ) : null}
         </div>
-        <p className="mt-3 text-sm text-foreground-soft">
-          Savings line: you currently have {formatCurrency(input.currentSavings)}.{" "}
-          {savingsGap > 0
-            ? `${formatCurrency(savingsGap)} still required to reach this cash outlay.`
-            : `${formatCurrency(savingsSurplus)} above this cash outlay.`}
-        </p>
-      </section>
+        <button
+          type="button"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-foreground"
+          onClick={() => setBannerCollapsed((current) => !current)}
+          aria-label={bannerCollapsed ? "Expand frozen banner" : "Collapse frozen banner"}
+        >
+          {bannerCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
+      </div>
+      {!bannerCollapsed ? (
+      <div className="grid gap-2.5 md:gap-3 md:grid-cols-3 md:items-start">
+        <div className="space-y-2.5 md:col-span-2">
+          <section className="animate-fade-up rounded-[1rem] border border-border bg-[linear-gradient(135deg,#edf5ef,#f5f2e9)] p-2.5 md:p-3 shadow-[0_10px_24px_rgba(33,47,37,0.12)]">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  data-testid="current-cash-outlay"
+                  className={`text-xl md:text-2xl font-semibold tracking-tight ${
+                    dutyOutputsUncertain ? "text-foreground-soft" : "text-foreground"
+                  }`}
+                >
+                  {currentCashDisplay}
+                </p>
+                <div
+                  className={`rounded-full px-2 py-0.5 text-[9px] md:px-3 md:py-1 md:text-xs font-semibold ${
+                    dutyOutputsUncertain ? "bg-[#f1f0ec] text-foreground-soft" : "bg-primary/10 text-primary-strong"
+                  }`}
+                >
+                  {`vs. ${baselineCashDisplay} without eligible schemes`}
+                </div>
+              </div>
+              {dutyOutputsUncertain ? (
+                <p className="text-[11px] text-foreground-soft">
+                  Duty outputs marked with * still rely on broad assumptions. {dutyIntake.reasons[0] ?? ""}
+                </p>
+              ) : null}
+            </div>
+            <label className="mt-1.5 grid gap-1 text-xs md:text-sm font-semibold">
+              <div className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-2 py-1.5 md:px-2.5 md:py-2">
+                <span className="whitespace-nowrap text-[11px] md:text-xs font-semibold text-foreground-soft">House Price:</span>
+                <Input
+                  className="h-7 w-[7.5rem] min-w-[7.5rem] text-xs md:h-8 md:w-[9rem] md:min-w-[9rem] md:text-sm"
+                  value={display.targetPropertyPrice}
+                  onChange={(event) => updateDisplay("targetPropertyPrice", event.currentTarget.value)}
+                />
+                <span className="text-foreground-soft">|</span>
+                <input
+                  data-testid="dashboard-target-price-slider"
+                  type="range"
+                  min={PROPERTY_PRICE_SLIDER_MIN}
+                  max={PROPERTY_PRICE_SLIDER_MAX}
+                  step={PROPERTY_PRICE_SLIDER_STEP}
+                  value={targetPriceSliderValue}
+                  onChange={(event) => updateTargetPriceFromSlider(event.currentTarget.value)}
+                  className="w-full accent-primary"
+                />
+              </div>
+            </label>
+          </section>
 
+          <section className="animate-fade-up rounded-[1rem] border border-border bg-white/95 p-2.5 shadow-[0_8px_20px_rgba(33,47,37,0.08)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-strong md:text-xs">
+                Choose your deposit path
+              </p>
+              <div className="hidden items-center gap-3 text-xs text-foreground-soft md:flex">
+                <span>{`Deposit ${currentScenario ? formatCurrency(currentScenario.depositAmount) : "Unavailable"}`}</span>
+                <span>{`Repayment ${formatCurrency(marketRepaymentAtExpenseFrequency)}`}</span>
+                <span>{`Save ${timeToSaveYears}y`}</span>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-2 overflow-x-auto md:hidden">
+              <span className="shrink-0 text-[11px] font-semibold text-foreground-soft">Chosen Deposit:</span>
+              {(depositPathway?.scenarioOptions ?? []).map((scenario) => {
+                const selected = currentScenario?.id === scenario.id;
+
+                return (
+                  <button
+                    key={`compact-mobile-${scenario.id}`}
+                    type="button"
+                    disabled={!scenario.available}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                      selected
+                        ? "bg-primary text-white"
+                        : "bg-surface text-foreground ring-1 ring-border"
+                    } ${!scenario.available ? "opacity-45" : ""}`}
+                    onClick={() =>
+                      setSelections((current) => ({
+                        ...current,
+                        activeDepositScenario: scenario.id,
+                      }))
+                    }
+                  >
+                    {scenario.depositPercent}%
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-2 hidden grid-cols-4 gap-2 md:grid">
+              {(depositPathway?.scenarioOptions ?? []).map((scenario) => {
+                const selected = currentScenario?.id === scenario.id;
+
+                return (
+                  <button
+                    key={`compact-desktop-${scenario.id}`}
+                    type="button"
+                    disabled={!scenario.available}
+                    className={`rounded-xl border px-3 py-2 text-left transition ${
+                      selected
+                        ? "border-primary bg-primary text-white shadow-[0_8px_18px_rgba(74,124,89,0.22)]"
+                        : "border-border bg-surface text-foreground"
+                    } ${!scenario.available ? "opacity-45" : ""}`}
+                    onClick={() =>
+                      setSelections((current) => ({
+                        ...current,
+                        activeDepositScenario: scenario.id,
+                      }))
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">{scenario.depositPercent}%</span>
+                      {selected ? <CheckCircle2 className="h-4 w-4" /> : null}
+                    </div>
+                    <p className={`mt-1 text-[11px] ${selected ? "text-white/85" : "text-foreground-soft"}`}>
+                      {requirementLabelForScenario(scenario)}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        <Card className="animate-fade-up border border-border bg-white/95 p-2 shadow-soft md:hidden">
+          <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-foreground-soft">Scheme tracker</p>
+          <div className="mt-2 grid grid-cols-4 gap-1.5">
+            {withSchemes.schemeStatuses.map((scheme) => (
+              <button
+                key={`mobile-${scheme.id}`}
+                type="button"
+                className={`relative rounded-lg border px-1 py-1.5 text-[10px] font-semibold leading-tight ${schemePillClass(scheme.state)}`}
+                onClick={() => setMobileSchemePopupId(scheme.id)}
+              >
+                <span className="absolute right-1 top-0.5 text-[9px] font-semibold opacity-80">(i)</span>
+                <span className="block pr-3 text-left">
+                  {scheme.id === "stamp-duty"
+                    ? "Stamp Duty"
+                    : scheme.id === "guarantee"
+                      ? "First Home Guarantee"
+                      : scheme.id === "help-to-buy"
+                        ? "Help to buy"
+                        : "Super saver"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="hidden h-fit bg-white/95 p-2.5 shadow-soft md:block">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold tracking-tight">Scheme tracker</h2>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-foreground"
+              onClick={() => setSchemePanelOpen((current) => !current)}
+              aria-label="Toggle scheme tracker"
+            >
+              {schemePanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+          {schemePanelOpen ? (
+            <div className="mt-3 space-y-2">
+              {withSchemes.schemeStatuses.map((scheme) => (
+                <div key={scheme.id} className={`rounded-lg border p-2 ${schemePillClass(scheme.state)}`}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                    onClick={() => toggleSchemeDetail(scheme.id)}
+                  >
+                    <span className="text-[11px] font-semibold leading-4">{scheme.label}</span>
+                    <span className="inline-flex items-center gap-1">
+                      {scheme.state === "active" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      ) : scheme.state === "watch" || scheme.state === "available" || scheme.state === "neutral" ? (
+                        <CircleAlert className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                      )}
+                      {schemeDetailOpen[scheme.id] ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </span>
+                  </button>
+                  {schemeDetailOpen[scheme.id] ? (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-[11px] leading-4">{scheme.detail}</p>
+                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                        {scheme.href ? (
+                          <a
+                            href={scheme.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 underline underline-offset-4"
+                          >
+                            Official link
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : null}
+                        {SCHEME_BLOG_SLUG_BY_ID[scheme.id] ? (
+                          <Link href={`/learn/${SCHEME_BLOG_SLUG_BY_ID[scheme.id]}`} className="underline underline-offset-4">
+                            Scheme blog
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-foreground-soft">
+              Expand to view active relief and guarantee pathways.
+            </p>
+          )}
+        </Card>
+      </div>
+      ) : null}
+      </div>
+      </div>
+
+      <div className="order-2">
       <SectionCard
         title="Your responses"
-        subtitle="Compact toggles and numbers keep the scenario easy to adjust on mobile."
+        subtitle="Basic answers stay visible to everyone. Advanced only appears when the duty path needs Tier 2 detail."
         isOpen={openSections.scenario}
         onToggle={() => toggleSection("scenario")}
       >
-        <div className="space-y-5">
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-            {booleanControls.map((control) => {
-              const Icon = control.icon;
-
-              return (
-                <button
-                  key={control.label}
-                  type="button"
-                  className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-colors ${compactBooleanClass(
-                    control.active,
-                  )}`}
-                  onClick={control.onToggle}
-                >
-                  <span className="flex items-center gap-1.5 text-xs font-semibold">
-                    <Icon className="h-3.5 w-3.5" />
-                    {control.label}
-                  </span>
-                  {control.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-                </button>
-              );
-            })}
+        <div className="space-y-4 md:space-y-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                responseTab === "basic" ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+              }`}
+              onClick={() => setResponseTab("basic")}
+            >
+              Basic
+            </button>
+            {showAdvancedTab ? (
+              <button
+                type="button"
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  responseTab === "advanced" ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                }`}
+                onClick={() => setResponseTab("advanced")}
+              >
+                Advanced
+              </button>
+            ) : null}
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            <div className="grid gap-2">
-              <span className="text-sm font-semibold">State / territory</span>
-              <div className="grid grid-cols-4 gap-2">
-                {HOME_STATE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors ${
-                      input.homeState === option.value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
-                    }`}
-                    onClick={() =>
-                      setInput((current) => ({
-                        ...current,
-                        homeState: option.value,
-                        livingInNsw: option.value === "nsw",
-                      }))
-                    }
-                  >
-                    {option.label}
-                  </button>
-                ))}
+          {responseTab === "basic" ? (
+            <div className="space-y-4">
+              {showAdvancedTab && dutyIntake.needsTier2 ? (
+                <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
+                  Advanced duty questions are now relevant for this path. Open <span className="font-semibold">Advanced</span> to finish Tier 2.{" "}
+                  {dutyIntake.reasons[0] ?? ""}
+                </div>
+              ) : null}
+
+              <div className="grid gap-1.5 md:gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                {basicBooleanControls.map((control) => {
+                  const Icon = control.icon;
+
+                  return (
+                    <button
+                      key={control.label}
+                      type="button"
+                      className={`flex items-center justify-between rounded-lg border px-2 py-1.5 text-left transition-colors md:px-2.5 md:py-2 ${compactBooleanClass(
+                        control.active,
+                      )}`}
+                      onClick={control.onToggle}
+                    >
+                      <span className="flex items-center gap-1.5 text-xs font-semibold">
+                        <Icon className="h-3.5 w-3.5" />
+                        {control.label}
+                      </span>
+                      {control.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
 
-            <div className="grid gap-2">
-              <span className="text-sm font-semibold">Buying area</span>
-              <div className="grid grid-cols-2 gap-2">
-                {([
-                  ["state-capital", "State capital"],
-                  ["regional", "Regional"],
-                ] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                      input.buyingArea === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
-                    }`}
-                    onClick={() =>
-                      setInput((current) => ({
-                        ...current,
-                        buyingArea: value,
-                      }))
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label className="grid gap-2 text-sm font-semibold">
-              <span>Age</span>
-              <Input
-                className="h-10 text-base"
-                value={display.age}
-                onChange={(event) => updateDisplay("age", event.currentTarget.value)}
-              />
-            </label>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="space-y-3">
-              <div className="rounded-xl border border-border bg-surface p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">Before-tax income</span>
-                  <div className="flex gap-1">
-                    {(["weekly", "monthly", "annually"] as const).map((frequency) => (
+              <div className="grid gap-2 md:gap-3 lg:grid-cols-2">
+                <div className="grid gap-2">
+                  <span className="text-sm font-semibold">State / territory</span>
+                  <div className="grid grid-cols-4 gap-1.5 md:gap-2">
+                    {HOME_STATE_OPTIONS.map((option) => (
                       <button
-                        key={`income-${frequency}`}
+                        key={option.value}
                         type="button"
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
-                          incomeFrequency === frequency ? "bg-primary text-white" : "bg-white ring-1 ring-border hover:bg-surface-muted"
+                        className={`rounded-lg px-2 py-1 text-[10px] font-semibold transition-colors md:text-[11px] ${
+                          input.homeState === option.value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
                         }`}
-                        onClick={() => updateFrequency("income", frequency)}
+                        onClick={() =>
+                          setInput((current) => ({
+                            ...current,
+                            homeState: option.value,
+                            livingInNsw: option.value === "nsw",
+                          }))
+                        }
                       >
-                        {frequency}
+                        {option.label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <Input
-                  className="mt-3 h-10 text-base"
-                  value={display.annualSalary}
-                  onChange={(event) => updateDisplay("annualSalary", event.currentTarget.value)}
-                />
-                <p className="mt-2 text-xs text-foreground-soft">
-                  Broad tax caveat: dashboard projections use a simple resident tax scenario.
-                </p>
-              </div>
 
-              <div className="rounded-xl border border-border bg-surface p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">Expected expenses</span>
-                  <div className="flex gap-1">
-                    {(["weekly", "monthly", "annually"] as const).map((frequency) => (
+                <div className="grid gap-2">
+                  <span className="text-sm font-semibold">Property type</span>
+                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3 md:gap-2">
+                    {PROPERTY_TYPE_OPTIONS.map((option) => (
                       <button
-                        key={`expense-${frequency}`}
+                        key={option.value}
                         type="button"
-                        className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
-                          expenseFrequency === frequency ? "bg-primary text-white" : "bg-white ring-1 ring-border hover:bg-surface-muted"
+                        className={`rounded-lg px-2 py-1 text-[10px] font-semibold transition-colors md:text-[11px] ${
+                          (input.propertyTypeDetailed ?? "established-home") === option.value
+                            ? "bg-primary text-white"
+                            : "bg-surface ring-1 ring-border hover:bg-surface-muted"
                         }`}
-                        onClick={() => updateFrequency("expense", frequency)}
+                        onClick={() =>
+                          setInput((current) => ({
+                            ...current,
+                            propertyTypeDetailed: option.value,
+                            buyingNewHome:
+                              option.value === "new-home" ||
+                              option.value === "off-the-plan-home" ||
+                              option.value === "house-and-land-package",
+                          }))
+                        }
                       >
-                        {frequency}
+                        {option.label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <Input
-                  className="mt-3 h-10 text-base"
-                  value={display.averageMonthlyExpenses}
-                  onChange={(event) => updateDisplay("averageMonthlyExpenses", event.currentTarget.value)}
-                />
-              </div>
-            </div>
 
-            <div className="space-y-3">
-              <label className="grid gap-2 text-sm font-semibold">
-                <span>Current savings</span>
-                <Input
-                  className="h-10 text-base"
-                  value={display.currentSavings}
-                  onChange={(event) => updateDisplay("currentSavings", event.currentTarget.value)}
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                <span>Private debt</span>
-                <Input
-                  className="h-10 text-base"
-                  value={display.privateDebt}
-                  onChange={(event) => updateDisplay("privateDebt", event.currentTarget.value)}
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-semibold">
-                <span>HECS / HELP</span>
-                <Input
-                  className="h-10 text-base"
-                  value={display.hecsDebt}
-                  onChange={(event) => updateDisplay("hecsDebt", event.currentTarget.value)}
-                />
-              </label>
-            </div>
-          </div>
-
-          <label className="grid gap-2 text-sm font-semibold">
-            <span>Target property price</span>
-            <Input
-              className="h-10 text-base"
-              value={display.targetPropertyPrice}
-              onChange={(event) => updateDisplay("targetPropertyPrice", event.currentTarget.value)}
-            />
-          </label>
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Choose your deposit path"
-        subtitle="Pick one route. Each option shows which scheme it relies on and whether LMI can apply."
-        isOpen={openSections.deposit}
-        onToggle={() => toggleSection("deposit")}
-      >
-        <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {(depositPathway?.scenarioOptions ?? []).map((scenario) => {
-              const selected = currentScenario?.id === scenario.id;
-
-              return (
-                <button
-                  key={scenario.id}
-                  type="button"
-                  disabled={!scenario.available}
-                  className={`rounded-[1rem] border p-4 text-left transition ${scenarioButtonClass(scenario, selected)}`}
-                  onClick={() =>
-                    setSelections((current) => ({
-                      ...current,
-                      activeDepositScenario: scenario.id,
-                    }))
-                  }
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-2xl font-semibold">{scenario.depositPercent}%</p>
-                    {selected ? <CheckCircle2 className="h-5 w-5" /> : null}
+                <div className="grid gap-2">
+                  <span className="text-sm font-semibold">Buying setup</span>
+                  <div className="grid grid-cols-2 gap-1.5 md:gap-2">
+                    {([
+                      ["solo", "Buying alone"],
+                      ["joint", "Buying jointly"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-colors md:px-3 md:py-1.5 md:text-[11px] ${
+                          input.buyingSoloOrJoint === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
+                        }`}
+                        onClick={() =>
+                          setInput((current) => ({
+                            ...current,
+                            buyingSoloOrJoint: value,
+                          }))
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                  <p className="mt-3 text-sm font-semibold">{formatCurrency(scenario.depositAmount)}</p>
-                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.16em] opacity-80">
-                    {requirementLabelForScenario(scenario)}
-                  </p>
-                  <p className="mt-2 text-xs leading-5 opacity-90">
-                    {scenario.statusNote}
-                    {scenario.requiresLmi ? " LMI can apply." : ""}
-                  </p>
-                  <p className="mt-2 text-xs font-semibold opacity-95">
-                    {`Estimated repayment (${frequencyLabel(expenseFrequency)}): ${formatCurrency(
-                      fromMonthlyAmount(
-                        amortizedMonthlyRepayment(
-                          scenario.mortgageAmount,
-                          CURRENT_MARKET_OWNER_OCCUPIER_RATE +
-                            ((input.targetPropertyPrice > 0
-                              ? (scenario.mortgageAmount / input.targetPropertyPrice) * 100
-                              : 0) > 95
-                              ? 0.6
-                              : (input.targetPropertyPrice > 0
-                                    ? (scenario.mortgageAmount / input.targetPropertyPrice) * 100
-                                    : 0) > 80
-                                ? 0.25
-                                : 0),
-                          30,
-                        ),
-                        expenseFrequency,
-                      ),
-                    )}`}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+                </div>
 
-          <div className="grid gap-3 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
-            <div className="rounded-[1rem] border border-border bg-surface p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-strong">Time to save</p>
-              <p className="mt-2 text-lg font-semibold">
-                {currentScenario ? `${timeToSaveYears} years` : "Unavailable"}
-              </p>
-              <p className="mt-2 text-xs leading-5 text-foreground-soft">
-                Assumes no inflation, raises, or changes to savings, debt, or expenses.
-              </p>
-            </div>
-            <div className="rounded-[1rem] border border-border bg-surface p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-strong">Mortgage</p>
-              <div className="mt-2 grid gap-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground-soft">Expected tenor</span>
-                  <span className="font-semibold">30 years</span>
+                <div className="grid gap-2">
+                  <span className="text-sm font-semibold">Buying area</span>
+                  <div className="grid grid-cols-2 gap-1.5 md:gap-2">
+                    {([
+                      ["state-capital", "State capital"],
+                      ["regional", "Regional / outside metro"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-colors md:px-3 md:py-1.5 md:text-[11px] ${
+                          input.buyingArea === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border hover:bg-surface-muted"
+                        }`}
+                        onClick={() =>
+                          setInput((current) => ({
+                            ...current,
+                            buyingArea: value,
+                          }))
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground-soft">Market average estimate</span>
-                  <span className="font-semibold">{displayedRate.toFixed(2)}% p.a.</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground-soft">Higher-LVR adjustment</span>
-                  <span className="font-semibold">
-                    {lvrRatePenalty > 0 ? `+${lvrRatePenalty.toFixed(2)}% p.a.` : "None"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground-soft">{`P&I repayment (${frequencyLabel(expenseFrequency)})`}</span>
-                  <span className="font-semibold">{formatCurrency(marketRepaymentAtExpenseFrequency)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground-soft">Payoff pace if flat</span>
-                  <span className="font-semibold">
-                    {currentScenario ? `${currentScenario.estimatedPayoffYears} years` : "Unavailable"}
-                  </span>
-                </div>
+
+                <label className="grid gap-1.5 md:gap-2 text-sm font-semibold lg:max-w-sm">
+                  <span>Current savings</span>
+                  <Input
+                    className="h-9 text-sm md:h-10 md:text-base"
+                    value={display.currentSavings}
+                    onChange={(event) => updateDisplay("currentSavings", event.currentTarget.value)}
+                  />
+                </label>
+                <label className="grid gap-1.5 md:gap-2 text-sm font-semibold lg:max-w-sm">
+                  <span>Household income (previous FY)</span>
+                  <Input
+                    className="h-9 text-sm md:h-10 md:text-base"
+                    value={display.actHouseholdIncome}
+                    onChange={(event) => updateDisplay("actHouseholdIncome", event.currentTarget.value)}
+                  />
+                </label>
+                <label className="grid gap-1.5 md:gap-2 text-sm font-semibold lg:max-w-sm">
+                  <span>Dependant children</span>
+                  <Input
+                    className="h-9 text-sm md:h-10 md:text-base"
+                    value={display.dependentChildrenCount}
+                    onChange={(event) => updateDisplay("dependentChildrenCount", event.currentTarget.value)}
+                  />
+                </label>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
+                {dutyIntake.hasTier3EdgeCase
+                  ? "This path still uses broad duty assumptions even after Advanced is complete."
+                  : dutyIntake.tier2Complete
+                    ? "Advanced duty details are complete for the supported Tier 2 path."
+                    : "Complete the Advanced answers below to tighten the duty estimate."}
+              </div>
+
+              {advancedFieldIds.length === 0 ? (
+                <p className="text-sm text-foreground-soft">No Advanced duty answers are needed for the current scenario.</p>
+              ) : (
+                <div className="grid gap-3">
+                  {advancedFieldIds.map((fieldId) => {
+                    if (fieldId === "buyerEntityType") {
+                      return (
+                        <div key={fieldId} className="grid gap-2">
+                          <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <div className="grid grid-cols-2 gap-1.5 md:grid-cols-3">
+                            {([
+                              ["individuals", "Individuals"],
+                              ["trust", "Trust"],
+                              ["company", "Company"],
+                              ["smsf", "SMSF"],
+                              ["corporate-trustee", "Corporate trustee"],
+                            ] as const).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                  input.buyerEntityType === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                                }`}
+                                onClick={() =>
+                                  setInput((current) => ({
+                                    ...current,
+                                    buyerEntityType: value,
+                                  }))
+                                }
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (fieldId === "jointEligibilityAligned") {
+                      return (
+                        <div key={fieldId} className="grid gap-2">
+                          <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {([
+                              [true, "Aligned"],
+                              [false, "Mixed profiles"],
+                            ] as const).map(([value, label]) => (
+                              <button
+                                key={label}
+                                type="button"
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                  input.jointEligibilityAligned === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                                }`}
+                                onClick={() =>
+                                  setInput((current) => ({
+                                    ...current,
+                                    jointEligibilityAligned: value,
+                                  }))
+                                }
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (fieldId === "foreignOwnershipMode") {
+                      return (
+                        <div key={fieldId} className="grid gap-2">
+                          <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {([
+                              ["full", "Full purchase"],
+                              ["partial", "Partial only"],
+                            ] as const).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                  input.foreignOwnershipMode === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                                }`}
+                                onClick={() =>
+                                  setInput((current) => ({
+                                    ...current,
+                                    foreignOwnershipMode: value,
+                                  }))
+                                }
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (fieldId === "waRegion") {
+                      return (
+                        <div key={fieldId} className="grid gap-2">
+                          <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {([
+                              ["perth-peel", "Perth / Peel"],
+                              ["outside-perth-peel", "Outside Perth / Peel"],
+                            ] as const).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                  input.waRegion === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                                }`}
+                                onClick={() =>
+                                  setInput((current) => ({
+                                    ...current,
+                                    waRegion: value,
+                                  }))
+                                }
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (fieldId === "qldConcessionPath") {
+                      return (
+                        <div key={fieldId} className="grid gap-2">
+                          <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <div className="grid gap-1.5 md:grid-cols-2">
+                            {([
+                              ["home-concession", "Home concession"],
+                              ["first-home-home-concession", "First-home home"],
+                              ["first-home-vacant-land-concession", "First-home vacant land"],
+                              ["no-concession-path", "No concession"],
+                            ] as const).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                  input.qldConcessionPath === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                                }`}
+                                onClick={() =>
+                                  setInput((current) => ({
+                                    ...current,
+                                    qldConcessionPath: value,
+                                  }))
+                                }
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (fieldId === "saReliefPath") {
+                      return (
+                        <div key={fieldId} className="grid gap-2">
+                          <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <div className="grid gap-1.5 md:grid-cols-2">
+                            {([
+                              ["new-home", "New home"],
+                              ["off-the-plan-apartment", "Off-the-plan apartment"],
+                              ["vacant-land", "Vacant land"],
+                              ["none", "None of those"],
+                            ] as const).map(([value, label]) => (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                  input.saReliefPath === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                                }`}
+                                onClick={() =>
+                                  setInput((current) => ({
+                                    ...current,
+                                    saReliefPath: value,
+                                  }))
+                                }
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (fieldId === "dependentChildrenCount") {
+                      return (
+                        <label key={fieldId} className="grid gap-2 text-sm font-semibold lg:max-w-sm">
+                          <span>{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                          <Input
+                            className="h-9 text-sm md:h-10 md:text-base"
+                            value={display.dependentChildrenCount}
+                            onChange={(event) => updateDisplay("dependentChildrenCount", event.currentTarget.value)}
+                          />
+                        </label>
+                      );
+                    }
+
+                    return (
+                      <div key={fieldId} className="grid gap-2">
+                        <span className="text-sm font-semibold">{ADVANCED_FIELD_LABELS[fieldId]}</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {([
+                            [true, "Yes"],
+                            [false, "No"],
+                          ] as const).map(([value, label]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                                input.ntHouseAndLandEligiblePath === value ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                              }`}
+                              onClick={() =>
+                                setInput((current) => ({
+                                  ...current,
+                                  ntHouseAndLandEligiblePath: value,
+                                }))
+                              }
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </SectionCard>
+      </div>
 
+      <div className="order-3">
       <SectionCard
         title="Cost breakdown details"
         subtitle="The left column is the current scheme-aware route. The grey column is the no-scheme comparison."
@@ -923,78 +1311,95 @@ export function FirstHomeDashboard({
               <div className="bg-[#efede7] px-4 py-3 text-foreground-soft">No-scheme</div>
             </div>
 
-            {currentRows.map((row) => (
+            {costRows.map((row) => (
               <div
                 key={row.label}
                 className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] border-t border-border text-sm"
               >
-                <div className="px-4 py-3 font-medium text-foreground">
+                <div className={`px-4 py-3 font-medium ${row.uncertain ? "text-foreground-soft" : "text-foreground"}`}>
                   <span className="mr-2 inline-flex min-w-[1.1rem] justify-center font-semibold text-primary-strong">
                     {row.sign}
                   </span>
                   {row.label}
                 </div>
-                <div className="px-4 py-3 font-semibold text-foreground">{signedCurrency(row.currentValue, row.sign)}</div>
+                <div className={`px-4 py-3 font-semibold ${row.uncertain ? "text-foreground-soft" : "text-foreground"}`}>
+                  {row.uncertain ? `${signedCurrency(row.currentValue, row.sign)}*` : signedCurrency(row.currentValue, row.sign)}
+                </div>
                 <div className="bg-[#f6f4ee] px-4 py-3 font-semibold text-foreground-soft">
-                  {signedCurrency(row.baselineValue, row.sign)}
+                  {row.uncertain ? `${signedCurrency(row.baselineValue, row.sign)}*` : signedCurrency(row.baselineValue, row.sign)}
                 </div>
               </div>
             ))}
 
             <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] border-t border-border text-sm">
-              <div className="bg-primary px-4 py-4 font-semibold text-white">Funds required from you</div>
-              <div className="bg-primary px-4 py-4 text-lg font-semibold text-white">{formatCurrency(currentCash)}</div>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-3 text-left font-medium text-foreground"
+                onClick={() => setSetupCostsOpen((current) => !current)}
+              >
+                <span className="inline-flex min-w-[1.1rem] justify-center font-semibold text-primary-strong">+</span>
+                <span>Grouped setup costs</span>
+                {setupCostsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              <div className="px-4 py-3 font-semibold text-foreground">
+                {signedCurrency(comparisonModel.cashOutlayOverlay.otherUpfrontCosts, "+")}
+              </div>
+              <div className="bg-[#f6f4ee] px-4 py-3 font-semibold text-foreground-soft">
+                {signedCurrency(withoutSchemes.cashOutlayOverlay.otherUpfrontCosts, "+")}
+              </div>
+            </div>
+            {setupCostsOpen ? (
+              <div className="border-t border-border bg-white p-4">
+                <div className="space-y-2">
+                  {setupCostDetails.map((metric) => (
+                    <div key={metric.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface px-3 py-2.5 text-sm">
+                      <span className="text-foreground-soft">
+                        <span
+                          className="cursor-help underline decoration-dotted"
+                          title={SETUP_COST_HINTS[metric.id] ?? "Settlement-related setup cost"}
+                        >
+                          {metric.label}
+                        </span>
+                      </span>
+                      <span className="font-semibold">{metric.value}</span>
+                    </div>
+                  ))}
+                  <p className="pt-2 text-xs text-foreground-soft">
+                    Disclaimer: these were my own settlement-style costs based on an $850k property. Email me to get in touch:{" "}
+                    <a href="mailto:jackson.henry.rogers@gmail.com" className="font-semibold text-primary underline underline-offset-2">
+                      jackson.henry.rogers@gmail.com
+                    </a>
+                    .
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)] border-t border-border text-sm">
+              <div className={`px-4 py-4 font-semibold ${dutyOutputsUncertain ? "bg-[#d8d4ca] text-foreground-soft" : "bg-primary text-white"}`}>
+                {dutyOutputsUncertain ? "Funds required from you*" : "Funds required from you"}
+              </div>
+              <div className={`px-4 py-4 text-lg font-semibold ${dutyOutputsUncertain ? "bg-[#ece9e1] text-foreground-soft" : "bg-primary text-white"}`}>
+                {currentCashDisplay}
+              </div>
               <div
                 data-testid="baseline-cash-outlay"
                 className="bg-[#dcd8cf] px-4 py-4 text-lg font-semibold text-foreground"
               >
-                {formatCurrency(baselineCash)}
+                {baselineCashDisplay}
               </div>
             </div>
           </div>
 
           <p className="rounded-xl border border-border bg-white px-4 py-3 text-sm text-foreground-soft">
-            Funds required from you = <span className="font-semibold">Home price - Bank funding + Transfer duty + Grouped setup costs</span>.
+            Funds required from you = <span className="font-semibold">Home price - Bank funding + Stamp duty + Grouped setup costs</span>.
           </p>
 
-          <div className="rounded-[1.25rem] border border-border bg-white/92 p-4">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-3 text-left"
-              onClick={() => setSetupCostsOpen((current) => !current)}
-            >
-              <div>
-                <p className="text-lg font-semibold tracking-tight">Grouped setup costs</p>
-                <p className="text-sm text-foreground-soft">Scaled from the settlement-style costs you shared.</p>
-              </div>
-              {setupCostsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-            {setupCostsOpen ? (
-              <div className="mt-4 space-y-2">
-                {setupCostDetails.map((metric) => (
-                  <div key={metric.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface px-3 py-2.5 text-sm">
-                    <span className="text-foreground-soft">
-                      <span className="cursor-help underline decoration-dotted" title={SETUP_COST_HINTS[metric.id] ?? "Settlement-related setup cost"}>
-                        {metric.label}
-                      </span>
-                    </span>
-                    <span className="font-semibold">{metric.value}</span>
-                  </div>
-                ))}
-                <p className="pt-2 text-xs text-foreground-soft">
-                  Disclaimer: these were my own settlement-style costs based on an $850k property. Email me to get in touch:{" "}
-                  <a href="mailto:jacksonrogers2001@gmail.com" className="font-semibold text-primary underline underline-offset-2">
-                    jacksonrogers2001@gmail.com
-                  </a>
-                  .
-                </p>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="rounded-[1rem] border border-border bg-surface p-4 text-sm text-foreground-soft">
-            The bank is providing {formatCurrency(withSchemes.cashOutlayOverlay.financedAmount)}. The buyer cash total only counts the deposit, transfer duty, and grouped setup costs.
-          </div>
+          {dutyOutputsUncertain ? (
+            <p className="rounded-xl border border-border bg-[#f1f0ec] px-4 py-3 text-sm text-foreground-soft">
+              Duty outputs marked with * still use broad assumptions. {dutyIntake.reasons.join(" ")}
+            </p>
+          ) : null}
 
           {currentScenario && currentScenario.timeToSaveMonths > 12 ? (
             <div className="rounded-[1.25rem] border border-[#d2bda2] bg-[#fbf4e8] p-5">
@@ -1024,112 +1429,57 @@ export function FirstHomeDashboard({
           ) : null}
         </div>
       </SectionCard>
-
-      <SectionCard
-        title="What do you want next?"
-        isOpen={openSections.next}
-        onToggle={() => toggleSection("next")}
-      >
-        <div className="grid gap-4">
-          <Link
-            href="/eoi/tools"
-            className="rounded-[1.1rem] border border-border bg-[#f2f7ee] p-5 transition hover:border-primary/30"
-          >
-            <p className="text-xl font-semibold tracking-tight">Join the Pro + Advice EOI</p>
-            <p className="mt-2 text-sm text-foreground-soft">
-              One expression-of-interest form for deeper tools and future licensed advice support.
-            </p>
-          </Link>
-        </div>
-      </SectionCard>
-
       </div>
 
-      <aside className="space-y-4 xl:sticky xl:top-24 xl:h-fit">
-        <Card className="bg-white/95 p-4 shadow-soft">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold tracking-tight">Scheme tracker</h2>
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-muted text-foreground"
-              onClick={() => setSchemePanelOpen((current) => !current)}
-              aria-label="Toggle scheme tracker"
-            >
-              {schemePanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-          </div>
-          {schemePanelOpen ? (
-            <div className="mt-4 space-y-3">
-              {withSchemes.schemeStatuses.map((scheme) => (
-                <div key={scheme.id} className={`rounded-lg border p-2.5 ${schemePillClass(scheme.state)}`}>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 text-left"
-                    onClick={() => toggleSchemeDetail(scheme.id)}
-                  >
-                    <span className="text-xs font-semibold">{scheme.label}</span>
-                    <span className="inline-flex items-center gap-1">
-                      {scheme.state === "active" ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      ) : scheme.state === "watch" || scheme.state === "available" ? (
-                        <CircleAlert className="h-3.5 w-3.5 shrink-0" />
-                      ) : (
-                        <XCircle className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                      )}
-                      {schemeDetailOpen[scheme.id] ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                    </span>
-                  </button>
-                  {schemeDetailOpen[scheme.id] ? (
-                    <div className="mt-2 space-y-2">
-                      <p className="text-[11px] leading-5">{scheme.detail}</p>
-                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-                        {scheme.href ? (
-                          <a
-                            href={scheme.href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 underline underline-offset-4"
-                          >
-                            Official link
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : null}
-                        {SCHEME_BLOG_SLUG_BY_ID[scheme.id] ? (
-                          <Link href={`/learn/${SCHEME_BLOG_SLUG_BY_ID[scheme.id]}`} className="underline underline-offset-4">
-                            Scheme blog
-                          </Link>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-foreground-soft">
-              Expand this rail to see which relief and guarantee pathways are active.
-            </p>
-          )}
-        </Card>
+      {mobileSchemePopupId ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 md:hidden">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-white p-4 shadow-[0_20px_50px_rgba(0,0,0,0.28)]">
+            {(() => {
+              const scheme = withSchemes.schemeStatuses.find((entry) => entry.id === mobileSchemePopupId);
+              if (!scheme) {
+                return null;
+              }
 
-        <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-primary to-accent p-0 text-white shadow-[0_16px_34px_rgba(53,91,66,0.35)]">
-          <div className="space-y-4 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">EOI pathways</p>
-            <h3 className="text-2xl font-semibold tracking-tight">Need deeper support?</h3>
-            <p className="text-sm text-white/90">
-              Pro tools and future licensed advice are combined into one EOI lane right now.
-            </p>
-            <div className="grid gap-2">
-              <Link
-                href="/eoi/tools"
-                className="rounded-lg bg-white px-4 py-2 text-center text-sm font-semibold text-primary transition hover:bg-white/90"
-              >
-                Join Pro + Advice EOI
-              </Link>
-            </div>
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${stateDotClass(scheme.state)}`} />
+                      <h3 className="text-base font-semibold">{scheme.label}</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-border px-2 py-1 text-xs font-semibold"
+                      onClick={() => setMobileSchemePopupId(null)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <p className="text-sm text-foreground-soft">{scheme.detail}</p>
+                  <div className="flex flex-wrap gap-3 text-xs font-semibold">
+                    {scheme.href ? (
+                      <a
+                        href={scheme.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 underline underline-offset-4"
+                      >
+                        Official link
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : null}
+                    {SCHEME_BLOG_SLUG_BY_ID[scheme.id] ? (
+                      <Link href={`/learn/${SCHEME_BLOG_SLUG_BY_ID[scheme.id]}`} className="underline underline-offset-4">
+                        Scheme blog
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
-        </Card>
-      </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

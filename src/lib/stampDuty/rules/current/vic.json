@@ -1,0 +1,248 @@
+{
+  "jurisdiction": "VIC",
+  "ruleset_version": "2026-03-10.vic.v2",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Reserved for future VIC-specific parameters."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "vic-transfer-duty",
+      "label": "SRO Victoria land transfer duty rates",
+      "url": "https://www.sro.vic.gov.au/rates-taxes-duties-and-levies",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "vic-first-home",
+      "label": "SRO Victoria first home owner duty exemption or concession",
+      "url": "https://www.sro.vic.gov.au/first-home-owner",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "vic-additional-duty",
+      "label": "SRO Victoria foreign purchaser additional duty",
+      "url": "https://www.sro.vic.gov.au/foreign-purchaser-additional-duty",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "vic_general_non_ppr_2025_12_31",
+      "effective_from": "2025-12-31",
+      "effective_to": null,
+      "priority": 20,
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 25000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.014
+        },
+        {
+          "min_value": 25000.01,
+          "max_value": 130000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 350,
+          "rate_per_100": 2.4,
+          "marginal_base_value": 25000
+        },
+        {
+          "min_value": 130000.01,
+          "max_value": 960000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 2870,
+          "rate_per_100": 6,
+          "marginal_base_value": 130000
+        },
+        {
+          "min_value": 960000.01,
+          "max_value": null,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.055
+        }
+      ],
+      "source_refs": ["vic-transfer-duty"]
+    },
+    {
+      "id": "vic_ppr_concession_2026_03_10",
+      "effective_from": "2026-03-10",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "first_home_buyer", "op": "neq", "value": true },
+          { "field": "property_value", "op": "between", "min": 130000.01, "max": 550000 }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 130000.01,
+          "max_value": 440000,
+          "formula_type": "marginal",
+          "rate_per_100": 1.4,
+          "marginal_base_value": 130000
+        },
+        {
+          "min_value": 440000.01,
+          "max_value": 550000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 4340,
+          "rate_per_100": 5.75,
+          "marginal_base_value": 440000
+        }
+      ],
+      "source_refs": ["vic-transfer-duty"]
+    }
+  ],
+  "concessions": [
+    {
+      "id": "vic_first_home_full_exemption_2026_03_10",
+      "name": "Victoria first-home full duty exemption",
+      "effective_from": "2026-03-10",
+      "effective_to": null,
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "lte", "value": 600000 }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["vic-first-home"],
+      "notes": [
+        "SRO Victoria states that eligible first-home buyers pay no duty for homes valued up to 600,000."
+      ]
+    },
+    {
+      "id": "vic_first_home_partial_concession_2026_03_10",
+      "name": "Victoria first-home partial duty concession",
+      "effective_from": "2026-03-10",
+      "effective_to": null,
+      "priority": 20,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "between", "min": 600000.01, "max": 750000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 600000.01,
+          "max_value": 750000,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.max(0, Math.floor(currentDuty * ((value - 600000) / 150000)))"
+        }
+      ],
+      "source_refs": ["vic-first-home"],
+      "notes": [
+        "SRO Victoria example outputs imply a linear concession between 600,001 and 750,000.",
+        "This implementation uses duty payable = floor(base duty * ((dutiable value - 600,000) / 150,000))."
+      ]
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "vic_foreign_purchaser_additional_duty_2019_07_01",
+      "name": "Victoria foreign purchaser additional duty",
+      "effective_from": "2019-07-01",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [{ "field": "foreign_buyer", "op": "eq", "value": true }]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 8,
+      "fallback_url": "https://www.sro.vic.gov.au/foreign-purchaser-additional-duty",
+      "source_refs": ["vic-additional-duty"],
+      "notes": ["SRO Victoria additional duty rate from 1 July 2019."]
+    },
+    {
+      "id": "vic_foreign_purchaser_additional_duty_2018_07_01",
+      "name": "Victoria foreign purchaser additional duty",
+      "effective_from": "2018-07-01",
+      "effective_to": "2019-06-30",
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [{ "field": "foreign_buyer", "op": "eq", "value": true }]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 7,
+      "fallback_url": "https://www.sro.vic.gov.au/foreign-purchaser-additional-duty",
+      "source_refs": ["vic-additional-duty"],
+      "notes": ["SRO Victoria additional duty rate from 1 July 2018 to 30 June 2019."]
+    },
+    {
+      "id": "vic_foreign_purchaser_additional_duty_2016_07_01",
+      "name": "Victoria foreign purchaser additional duty",
+      "effective_from": "2016-07-01",
+      "effective_to": "2018-06-30",
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [{ "field": "foreign_buyer", "op": "eq", "value": true }]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 3,
+      "fallback_url": "https://www.sro.vic.gov.au/foreign-purchaser-additional-duty",
+      "source_refs": ["vic-additional-duty"],
+      "notes": ["SRO Victoria additional duty rate from 1 July 2016 to 30 June 2018."]
+    }
+  ],
+  "notes": [
+    "Victoria general duty rates, owner-occupier concession rates, and foreign purchaser additional duty are encoded from SRO Victoria source material.",
+    "Victoria first-home partial concession uses the linear concession shape implied by SRO published example outputs."
+  ]
+}

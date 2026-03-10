@@ -1,0 +1,425 @@
+{
+  "jurisdiction": "SA",
+  "ruleset_version": "2026-03-10.sa.v2",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Reserved for future SA-specific parameters."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "sa-transfer-duty",
+      "label": "RevenueSA rate of stamp duty",
+      "url": "https://revenuesa.sa.gov.au/stamp-duty/rate-of-stamp-duty",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "sa-first-home",
+      "label": "RevenueSA first home buyer relief",
+      "url": "https://revenuesa.sa.gov.au/stamp-duty/first-home-buyer-relief",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "sa-foreign-ownership-surcharge",
+      "label": "RevenueSA foreign ownership surcharge",
+      "url": "https://revenuesa.sa.gov.au/stamp-duty/foreign-ownership-surcharge",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "sa_general_2023_06_15",
+      "effective_from": "2023-06-15",
+      "effective_to": null,
+      "priority": 50,
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 12000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.01
+        },
+        {
+          "min_value": 12000.01,
+          "max_value": 30000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 120,
+          "rate_per_100": 2,
+          "marginal_base_value": 12000
+        },
+        {
+          "min_value": 30000.01,
+          "max_value": 50000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 480,
+          "rate_per_100": 3,
+          "marginal_base_value": 30000
+        },
+        {
+          "min_value": 50000.01,
+          "max_value": 100000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 1080,
+          "rate_per_100": 3.5,
+          "marginal_base_value": 50000
+        },
+        {
+          "min_value": 100000.01,
+          "max_value": 200000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 2830,
+          "rate_per_100": 4,
+          "marginal_base_value": 100000
+        },
+        {
+          "min_value": 200000.01,
+          "max_value": 250000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 6830,
+          "rate_per_100": 4.25,
+          "marginal_base_value": 200000
+        },
+        {
+          "min_value": 250000.01,
+          "max_value": 300000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 8955,
+          "rate_per_100": 4.75,
+          "marginal_base_value": 250000
+        },
+        {
+          "min_value": 300000.01,
+          "max_value": 500000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 11330,
+          "rate_per_100": 5,
+          "marginal_base_value": 300000
+        },
+        {
+          "min_value": 500000.01,
+          "max_value": null,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 21330,
+          "rate_per_100": 5.5,
+          "marginal_base_value": 500000
+        }
+      ],
+      "source_refs": ["sa-transfer-duty"]
+    },
+    {
+      "id": "sa_historical_unresolved_before_2023_06_15",
+      "effective_from": "1900-01-01",
+      "effective_to": "2023-06-14",
+      "priority": 100,
+      "calculation_method": "unresolved",
+      "fallback_url": "https://revenuesa.sa.gov.au/stamp-duty/calculators/stamp-duty-calculator",
+      "source_refs": ["sa-transfer-duty"],
+      "unresolved_reason": "Historical SA transfer duty schedules before 15 June 2023 are not fully versioned.",
+      "todo": "Backfill pre-2023 SA transfer duty tables for historical calculations."
+    }
+  ],
+  "concessions": [
+    {
+      "id": "sa_first_home_new_home_full_relief_2023_06_15",
+      "name": "SA first-home full relief for new homes (value-capped period)",
+      "effective_from": "2023-06-15",
+      "effective_to": "2024-06-05",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": ["new_home", "off_the_plan_apartment", "house_and_land_package"]
+          },
+          { "field": "property_value", "op": "lte", "value": 650000 }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["sa-first-home"]
+    },
+    {
+      "id": "sa_first_home_new_home_partial_relief_2023_06_15",
+      "name": "SA first-home partial relief for new homes",
+      "effective_from": "2023-06-15",
+      "effective_to": "2024-06-05",
+      "priority": 20,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": ["new_home", "off_the_plan_apartment", "house_and_land_package"]
+          },
+          { "field": "property_value", "op": "between", "min": 650000.01, "max": 700000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 650000.01,
+          "max_value": 700000,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.max(0, Math.min(currentDuty, currentDuty * ((value - 650000) / 50000)))"
+        }
+      ],
+      "source_refs": ["sa-first-home"],
+      "notes": [
+        "RevenueSA partial-relief formula applied: duty payable = duty * ((dutiable value - 650,000) / 50,000)."
+      ]
+    },
+    {
+      "id": "sa_first_home_new_home_full_relief_2024_06_06",
+      "name": "SA first-home full relief for eligible new-home pathways",
+      "effective_from": "2024-06-06",
+      "effective_to": null,
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": ["new_home", "off_the_plan_apartment", "house_and_land_package"]
+          }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["sa-first-home"],
+      "notes": [
+        "RevenueSA states full relief applies regardless of property value for eligible new-home pathways from 6 June 2024."
+      ]
+    },
+    {
+      "id": "sa_first_home_vacant_land_full_2023_06_15",
+      "name": "SA first-home vacant land full relief",
+      "effective_from": "2023-06-15",
+      "effective_to": "2024-06-05",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "lte", "value": 400000 }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["sa-first-home"]
+    },
+    {
+      "id": "sa_first_home_vacant_land_partial_relief_2023_06_15",
+      "name": "SA first-home vacant land partial relief",
+      "effective_from": "2023-06-15",
+      "effective_to": "2024-06-05",
+      "priority": 20,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "between", "min": 400000.01, "max": 450000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 400000.01,
+          "max_value": 450000,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.max(0, Math.min(currentDuty, currentDuty * ((value - 400000) / 50000)))"
+        }
+      ],
+      "source_refs": ["sa-first-home"],
+      "notes": [
+        "RevenueSA partial-relief formula applied: duty payable = duty * ((dutiable value - 400,000) / 50,000)."
+      ]
+    },
+    {
+      "id": "sa_first_home_vacant_land_full_2024_06_06",
+      "name": "SA first-home vacant land full relief",
+      "effective_from": "2024-06-06",
+      "effective_to": "2025-02-12",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "lte", "value": 450000 }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["sa-first-home"]
+    },
+    {
+      "id": "sa_first_home_vacant_land_partial_relief_2024_06_06",
+      "name": "SA first-home vacant land partial relief",
+      "effective_from": "2024-06-06",
+      "effective_to": "2025-02-12",
+      "priority": 20,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "between", "min": 450000.01, "max": 500000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 450000.01,
+          "max_value": 500000,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.max(0, Math.min(currentDuty, currentDuty * ((value - 450000) / 50000)))"
+        }
+      ],
+      "source_refs": ["sa-first-home"],
+      "notes": [
+        "RevenueSA partial-relief formula applied: duty payable = duty * ((dutiable value - 450,000) / 50,000)."
+      ]
+    },
+    {
+      "id": "sa_first_home_vacant_land_full_2025_02_13",
+      "name": "SA first-home vacant land full relief",
+      "effective_from": "2025-02-13",
+      "effective_to": null,
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "lte", "value": 500000 }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["sa-first-home"]
+    },
+    {
+      "id": "sa_first_home_vacant_land_partial_relief_2025_02_13",
+      "name": "SA first-home vacant land partial relief",
+      "effective_from": "2025-02-13",
+      "effective_to": null,
+      "priority": 20,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "between", "min": 500000.01, "max": 550000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 500000.01,
+          "max_value": 550000,
+          "effect_formula_type": "formula_expression",
+          "expression": "Math.max(0, Math.min(currentDuty, currentDuty * ((value - 500000) / 50000)))"
+        }
+      ],
+      "source_refs": ["sa-first-home"],
+      "notes": [
+        "RevenueSA partial-relief formula applied: duty payable = duty * ((dutiable value - 500,000) / 50,000)."
+      ]
+    },
+    {
+      "id": "sa_first_home_foreign_surcharge_relief_unresolved_2025_02_13",
+      "name": "SA first-home foreign surcharge relief interaction (pending)",
+      "effective_from": "2025-02-13",
+      "effective_to": null,
+      "priority": 30,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "foreign_buyer", "op": "eq", "value": true }
+        ]
+      },
+      "effect_type": "replace_with_alternate_base_rule",
+      "source_refs": ["sa-first-home", "sa-foreign-ownership-surcharge"],
+      "notes": [
+        "RevenueSA notes foreign ownership surcharge relief may apply for eligible first-home pathways.",
+        "Surcharge-relief interaction is not yet fully represented in the engine."
+      ]
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "sa_foreign_ownership_surcharge_2018_01_01",
+      "name": "South Australia foreign ownership surcharge",
+      "effective_from": "2018-01-01",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 7,
+      "fallback_url": "https://revenuesa.sa.gov.au/stamp-duty/foreign-ownership-surcharge",
+      "source_refs": ["sa-foreign-ownership-surcharge"],
+      "notes": [
+        "RevenueSA states the surcharge of 7% applies to the value of the interest acquired in residential land from 1 January 2018."
+      ]
+    }
+  ],
+  "notes": [
+    "SA base duty table is source-backed from RevenueSA.",
+    "SA first-home full relief and value-scaled partial relief pathways are encoded using RevenueSA proportional-duty formulas.",
+    "Pre-15 June 2023 historical SA rates are unresolved fallback only."
+  ]
+}

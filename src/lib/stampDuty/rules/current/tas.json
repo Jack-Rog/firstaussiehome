@@ -1,0 +1,251 @@
+{
+  "jurisdiction": "TAS",
+  "ruleset_version": "2026-03-10.tas.v2",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Reserved for future TAS-specific parameters."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "tas-rates-of-duty",
+      "label": "State Revenue Office Tasmania rates of property transfer duty",
+      "url": "https://www.sro.tas.gov.au/property-transfer-duties/rates-of-duty",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "tas-first-home-established",
+      "label": "SRO Tasmania first home buyers of established homes duty relief",
+      "url": "https://www.sro.tas.gov.au/property-transfer-duties/concessions-exemptions/first-home-buyers-of-established-homes-duty-relief",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "tas-fids",
+      "label": "SRO Tasmania foreign investor duty surcharge",
+      "url": "https://www.sro.tas.gov.au/property-transfer-duties/foreign-investor-duty-surcharge",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "tas_general_2018_02_07",
+      "effective_from": "2018-02-07",
+      "effective_to": null,
+      "priority": 50,
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 3000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.0175
+        },
+        {
+          "min_value": 3000.01,
+          "max_value": 25000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 50,
+          "rate_per_100": 2.25,
+          "marginal_base_value": 3000
+        },
+        {
+          "min_value": 25000.01,
+          "max_value": 75000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 545,
+          "rate_per_100": 3.5,
+          "marginal_base_value": 25000
+        },
+        {
+          "min_value": 75000.01,
+          "max_value": 200000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 2295,
+          "rate_per_100": 4,
+          "marginal_base_value": 75000
+        },
+        {
+          "min_value": 200000.01,
+          "max_value": 375000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 7295,
+          "rate_per_100": 4.25,
+          "marginal_base_value": 200000
+        },
+        {
+          "min_value": 375000.01,
+          "max_value": 725000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 14732.5,
+          "rate_per_100": 4.5,
+          "marginal_base_value": 375000
+        },
+        {
+          "min_value": 725000.01,
+          "max_value": null,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 30482.5,
+          "rate_per_100": 4.75,
+          "marginal_base_value": 725000
+        }
+      ],
+      "source_refs": ["tas-rates-of-duty"]
+    },
+    {
+      "id": "tas_historical_unresolved_before_2018_02_07",
+      "effective_from": "1900-01-01",
+      "effective_to": "2018-02-06",
+      "priority": 100,
+      "calculation_method": "unresolved",
+      "fallback_url": "https://www.tro.tas.gov.au/Calculator/Duty",
+      "source_refs": ["tas-rates-of-duty"],
+      "unresolved_reason": "Historical TAS transfer duty schedules before 7 February 2018 are not yet versioned.",
+      "todo": "Backfill pre-2018 TAS rate schedules."
+    }
+  ],
+  "concessions": [
+    {
+      "id": "tas_first_home_established_discount_50_2018_02_07",
+      "name": "Tasmania first-home established home duty relief (50%)",
+      "effective_from": "2018-02-07",
+      "effective_to": "2024-02-17",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "established_home" },
+          { "field": "property_value", "op": "lte", "value": 750000 }
+        ]
+      },
+      "effect_type": "apply_percent_discount",
+      "discount_percent": 50,
+      "source_refs": ["tas-first-home-established"]
+    },
+    {
+      "id": "tas_first_home_established_exemption_2024_02_18",
+      "name": "Tasmania first-home established home duty relief (100%)",
+      "effective_from": "2024-02-18",
+      "effective_to": "2026-06-30",
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "established_home" },
+          { "field": "property_value", "op": "lte", "value": 750000 }
+        ]
+      },
+      "effect_type": "set_duty_to_zero",
+      "source_refs": ["tas-first-home-established"]
+    },
+    {
+      "id": "tas_first_home_established_post_2026_unresolved",
+      "name": "Tasmania first-home established home duty relief (post-30 June 2026 unresolved)",
+      "effective_from": "2026-07-01",
+      "effective_to": null,
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "established_home" },
+          { "field": "property_value", "op": "lte", "value": 750000 }
+        ]
+      },
+      "effect_type": "replace_with_alternate_base_rule",
+      "source_refs": ["tas-first-home-established"],
+      "notes": [
+        "SRO Tasmania duty-relief settings after 30 June 2026 are not yet encoded."
+      ]
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "tas_fids_2022_07_01",
+      "name": "Tasmania foreign investor duty surcharge",
+      "effective_from": "2022-07-01",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 8,
+      "fallback_url": "https://www.sro.tas.gov.au/property-transfer-duties/foreign-investor-duty-surcharge",
+      "source_refs": ["tas-fids"],
+      "notes": ["FIDS rate increased to 8% from 1 July 2022."]
+    },
+    {
+      "id": "tas_fids_2018_07_01",
+      "name": "Tasmania foreign investor duty surcharge",
+      "effective_from": "2018-07-01",
+      "effective_to": "2022-06-30",
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 3,
+      "fallback_url": "https://www.sro.tas.gov.au/property-transfer-duties/foreign-investor-duty-surcharge",
+      "source_refs": ["tas-fids"],
+      "notes": ["FIDS rate was 3% from 1 July 2018 to 30 June 2022."]
+    }
+  ],
+  "notes": [
+    "TAS base duty and FIDS schedules are encoded from SRO Tasmania tables.",
+    "First-home established-home relief is date-versioned at 50% then 100%, with post-30 June 2026 left unresolved pending legislative updates."
+  ]
+}

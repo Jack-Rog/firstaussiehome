@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-03-10T21:00:00+11:00",
+  "jurisdictions": [
+    {
+      "jurisdiction": "NSW",
+      "currency": "AUD",
+      "inputs": [
+        { "key": "contract_date", "type": "date", "required": true },
+        { "key": "dutiable_value", "type": "number", "required": true },
+        {
+          "key": "property_type",
+          "type": "enum",
+          "required": true,
+          "enum_values": ["established_home", "new_home", "vacant_land"]
+        },
+        { "key": "is_first_home_buyer", "type": "boolean", "required": true },
+        { "key": "is_owner_occupier", "type": "boolean", "required": true }
+      ],
+      "official_sources": [
+        {
+          "id": "nsw-transfer-duty",
+          "label": "Revenue NSW transfer duty",
+          "url": "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty",
+          "last_verified": "2026-03-10"
+        },
+        {
+          "id": "nsw-fhbas",
+          "label": "Revenue NSW First Home Buyers Assistance Scheme",
+          "url": "https://www.revenue.nsw.gov.au/grants-schemes/assistance-scheme",
+          "last_verified": "2026-03-10"
+        }
+      ],
+      "base_duty_rules": [
+        {
+          "id": "nsw_general_2022_02_01",
+          "effective_from": "2022-02-01",
+          "effective_to": null,
+          "calculation_method": "brackets",
+          "rounding": "none",
+          "brackets": [
+            { "min_value": 0, "max_value": 14000, "formula_type": "flat_rate_on_total", "percent_of_total": 0.0125 },
+            { "min_value": 14000.01, "max_value": 31000, "formula_type": "fixed_plus_marginal", "fixed_amount": 175, "rate_per_100": 1.5, "marginal_base_value": 14000 },
+            { "min_value": 31000.01, "max_value": 83000, "formula_type": "fixed_plus_marginal", "fixed_amount": 430, "rate_per_100": 1.75, "marginal_base_value": 31000 },
+            { "min_value": 83000.01, "max_value": 313000, "formula_type": "fixed_plus_marginal", "fixed_amount": 1340, "rate_per_100": 3.5, "marginal_base_value": 83000 },
+            { "min_value": 313000.01, "max_value": 1043000, "formula_type": "fixed_plus_marginal", "fixed_amount": 9390, "rate_per_100": 4.5, "marginal_base_value": 313000 },
+            { "min_value": 1043000.01, "max_value": null, "formula_type": "fixed_plus_marginal", "fixed_amount": 42240, "rate_per_100": 5.5, "marginal_base_value": 1043000 }
+          ],
+          "source_refs": ["nsw-transfer-duty"]
+        }
+      ],
+      "concessions": [
+        {
+          "id": "nsw_fhbas_home_2023_07_01",
+          "name": "First Home Buyers Assistance Scheme - home",
+          "effective_from": "2023-07-01",
+          "effective_to": null,
+          "priority": 10,
+          "eligibility": {
+            "operator": "AND",
+            "conditions": [
+              { "field": "is_first_home_buyer", "op": "eq", "value": true },
+              { "field": "is_owner_occupier", "op": "eq", "value": true },
+              { "field": "property_type", "op": "in", "value": ["established_home", "new_home"] }
+            ]
+          },
+          "effect_type": "replace_with_piecewise_formula",
+          "piecewise_effect_brackets": [
+            { "min_value": 0, "max_value": 800000, "effect_formula_type": "zero" },
+            { "min_value": 800000.01, "max_value": 999999.99, "effect_formula_type": "informational_only" }
+          ],
+          "source_refs": ["nsw-fhbas"],
+          "notes": [
+            "Replace informational-only segment with exact sliding concession formula or lookup table when extracted from official calculator."
+          ]
+        }
+      ],
+      "notes": [
+        "This example intentionally leaves NSW sliding concession bands unresolved until calculator extraction is completed."
+      ]
+    }
+  ]
+}

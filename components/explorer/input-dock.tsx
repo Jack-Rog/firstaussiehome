@@ -3,6 +3,7 @@
 import { InputSegmentToggle } from "@/components/explorer/input-segment-toggle";
 import { Input } from "@/components/ui/input";
 import type { FirstHomeExplorerInput } from "@/src/lib/types";
+import { formatCurrency } from "@/src/lib/utils";
 
 type InputDockProps = {
   input: FirstHomeExplorerInput;
@@ -10,6 +11,9 @@ type InputDockProps = {
   onSegmentChange: (segment: "situation" | "numbers") => void;
   onChange: <Key extends keyof FirstHomeExplorerInput>(key: Key, value: FirstHomeExplorerInput[Key]) => void;
 };
+const TARGET_PRICE_SLIDER_MIN = 200000;
+const TARGET_PRICE_SLIDER_MAX = 2500000;
+const TARGET_PRICE_SLIDER_STEP = 5000;
 
 function ToggleRow({
   label,
@@ -135,6 +139,25 @@ export function InputDock({
                   value={input.targetPropertyPrice}
                   onChange={(event) => onChange("targetPropertyPrice", Number(event.currentTarget.value))}
                 />
+                <div className="rounded-xl border border-border bg-surface p-3">
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-foreground-soft">
+                    <span>{formatCurrency(TARGET_PRICE_SLIDER_MIN)}</span>
+                    <span>Slide property value</span>
+                    <span>{formatCurrency(TARGET_PRICE_SLIDER_MAX)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={TARGET_PRICE_SLIDER_MIN}
+                    max={TARGET_PRICE_SLIDER_MAX}
+                    step={TARGET_PRICE_SLIDER_STEP}
+                    value={Math.min(
+                      TARGET_PRICE_SLIDER_MAX,
+                      Math.max(TARGET_PRICE_SLIDER_MIN, input.targetPropertyPrice || TARGET_PRICE_SLIDER_MIN),
+                    )}
+                    onChange={(event) => onChange("targetPropertyPrice", Number(event.currentTarget.value))}
+                    className="mt-3 w-full accent-primary"
+                  />
+                </div>
               </label>
               <details className="rounded-3xl border border-border bg-surface px-4 py-3">
                 <summary className="cursor-pointer text-sm font-semibold">Advanced</summary>

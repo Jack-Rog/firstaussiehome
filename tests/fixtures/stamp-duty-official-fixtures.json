@@ -1,0 +1,233 @@
+[
+  {
+    "id": "nsw-general-duty-500k",
+    "description": "NSW transfer duty base schedule at $500,000.",
+    "source_url": "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty",
+    "input": {
+      "state": "NSW",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 17029,
+      "finalDuty": 17029,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "nsw-foreign-surcharge-2026",
+    "description": "NSW surcharge purchaser duty rate from 1 January 2025.",
+    "source_url": "https://www.revenue.nsw.gov.au/taxes-duties-levies-royalties/transfer-duty/surcharge-purchaser-duty",
+    "input": {
+      "state": "NSW",
+      "property_value": 1000000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": true
+    },
+    "expected": {
+      "baseDuty": 39529,
+      "surchargeAmount": 90000,
+      "finalDuty": 129529,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "vic-general-duty-500k",
+    "description": "VIC non-principal place of residence duty table at $500,000.",
+    "source_url": "https://www.sro.vic.gov.au/rates-taxes-duties-and-levies",
+    "input": {
+      "state": "VIC",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 25070,
+      "finalDuty": 25070,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "vic-first-home-full-exemption-550k",
+    "description": "VIC first-home full exemption for homes valued up to $600,000.",
+    "source_url": "https://www.sro.vic.gov.au/first-home-owner",
+    "input": {
+      "state": "VIC",
+      "property_value": 550000,
+      "property_type": "established_home",
+      "first_home_buyer": true,
+      "owner_occupier": true,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "finalDuty": 0,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "qld-general-duty-500k",
+    "description": "QLD transfer duty general rates at $500,000.",
+    "source_url": "https://qro.qld.gov.au/duties/transfer-duty/calculate/rates/",
+    "input": {
+      "state": "QLD",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 15925,
+      "finalDuty": 15925,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "wa-general-duty-500k",
+    "description": "WA transfer duty general rates at $500,000.",
+    "source_url": "https://www.wa.gov.au/service/financial-management/taxation-and-duty-payments/transfer-duty",
+    "input": {
+      "state": "WA",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 18325,
+      "finalDuty": 18325,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "sa-general-duty-500k",
+    "description": "SA transfer duty rates at $500,000.",
+    "source_url": "https://revenuesa.sa.gov.au/stamp-duty/rate-of-stamp-duty",
+    "input": {
+      "state": "SA",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 21330,
+      "finalDuty": 21330,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "tas-general-duty-500k",
+    "description": "Tasmania property transfer duty rates at $500,000.",
+    "source_url": "https://www.sro.tas.gov.au/property-transfer-duties/rates-of-duty",
+    "input": {
+      "state": "TAS",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 20357.5,
+      "finalDuty": 20357.5,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "act-owner-duty-500k",
+    "description": "ACT owner-occupier conveyance duty rates from 1 July 2025 at $500,000.",
+    "source_url": "https://www.revenue.act.gov.au/duties/conveyance-duty",
+    "input": {
+      "state": "ACT",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": true,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 8408,
+      "finalDuty": 8408,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "act-hbcs-exemption-500k",
+    "description": "ACT Home Buyer Concession Scheme duty exemption where income eligibility is confirmed.",
+    "source_url": "https://www.revenue.act.gov.au/home-buyer-assistance/home-buyer-concession-scheme",
+    "input": {
+      "state": "ACT",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": true,
+      "owner_occupier": true,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false,
+      "state_specific_inputs": {
+        "act_hbcs_income_eligible": true
+      }
+    },
+    "expected": {
+      "baseDuty": 8408,
+      "finalDuty": 0,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "nt-general-duty-500k",
+    "description": "NT conveyance duty formula (post-1 July 2017) at $500,000.",
+    "source_url": "https://nt.gov.au/property/home-owner-assistance/js/calculators.js",
+    "input": {
+      "state": "NT",
+      "property_value": 500000,
+      "property_type": "established_home",
+      "first_home_buyer": false,
+      "owner_occupier": false,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 23928.6,
+      "finalDuty": 23928.6,
+      "unresolved": false
+    }
+  },
+  {
+    "id": "nt-first-home-house-and-land-exemption-700k",
+    "description": "NT first-home house and land package stamp duty exemption.",
+    "source_url": "https://nt.gov.au/property/home-owner-assistance/stamp-duty-exemption-for-house-and-land-packages",
+    "input": {
+      "state": "NT",
+      "property_value": 700000,
+      "property_type": "house_and_land_package",
+      "first_home_buyer": true,
+      "owner_occupier": true,
+      "transaction_date": "2026-03-10",
+      "foreign_buyer": false
+    },
+    "expected": {
+      "baseDuty": 34650,
+      "finalDuty": 0,
+      "unresolved": false
+    }
+  }
+]

@@ -15,6 +15,10 @@ import type {
   ReferenceKey,
 } from "@/src/lib/types";
 import { formatCurrency, formatPercent } from "@/src/lib/utils";
+import {
+  calculateIndicativeNswFirstHomeDuty,
+  calculateIndicativeNswTransferDuty,
+} from "@/src/lib/stampDuty";
 
 export const FIRST_HOME_REVIEW_DATE = "2026-03-03";
 const TAKE_HOME_PROXY = 0.76;
@@ -78,48 +82,6 @@ function principalFromMonthlyRepayment(monthlyPayment: number, annualRate: numbe
   }
 
   return (monthlyPayment * (1 - Math.pow(1 + monthlyRate, -periods))) / monthlyRate;
-}
-
-function calculateNswTransferDuty(value: number) {
-  if (value <= 0) {
-    return 0;
-  }
-
-  if (value <= 17000) {
-    return value * 0.0125;
-  }
-
-  if (value <= 36000) {
-    return 212 + (value - 17000) * 0.015;
-  }
-
-  if (value <= 97000) {
-    return 497 + (value - 36000) * 0.0175;
-  }
-
-  if (value <= 364000) {
-    return 1564 + (value - 97000) * 0.035;
-  }
-
-  if (value <= 1212000) {
-    return 10909 + (value - 364000) * 0.045;
-  }
-
-  return 49149 + (value - 1212000) * 0.055;
-}
-
-function calculateIndicativeFirstHomeDuty(value: number) {
-  const standardDuty = calculateNswTransferDuty(value);
-
-  if (value <= 800000) {
-    return 0;
-  }
-
-  if (value < 1000000) {
-    return (value - 800000) * 0.19706;
-  }
-
-  return standardDuty;
 }
 
 function buildTimeToSaveRows(input: FirstHomeExplorerInput, derivedMonthlySavings: number) {
@@ -295,8 +257,8 @@ export function buildFirstHomeExplorerOutput(
   const projectedDti = input.annualSalary === 0 ? 0 : (homeLoanAmount + input.privateDebt + input.hecsDebt) / input.annualSalary;
   const currentLvr = input.targetPropertyPrice === 0 ? 0 : (homeLoanAmount / input.targetPropertyPrice) * 100;
   const depositPercent = input.targetPropertyPrice === 0 ? 0 : (input.currentSavings / input.targetPropertyPrice) * 100;
-  const stampDuty = calculateNswTransferDuty(input.targetPropertyPrice);
-  const firstHomeDuty = calculateIndicativeFirstHomeDuty(input.targetPropertyPrice);
+  const stampDuty = calculateIndicativeNswTransferDuty(input.targetPropertyPrice);
+  const firstHomeDuty = calculateIndicativeNswFirstHomeDuty(input.targetPropertyPrice);
   const stampDutySaving = Math.max(stampDuty - firstHomeDuty, 0);
   const firstHomeGuaranteeMinimumDeposit = input.targetPropertyPrice * 0.05;
   const timeToSaveRows = buildTimeToSaveRows(input, derivedMonthlySavings);

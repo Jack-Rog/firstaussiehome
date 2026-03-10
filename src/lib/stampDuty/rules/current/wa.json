@@ -1,0 +1,381 @@
+{
+  "jurisdiction": "WA",
+  "ruleset_version": "2026-03-10.wa.v2",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Optional WA keys: state_specific_inputs.wa_region = metro_or_peel | regional."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "wa-transfer-duty",
+      "label": "WA transfer duty rates",
+      "url": "https://www.wa.gov.au/service/financial-management/taxation-and-duty-payments/transfer-duty",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "wa-first-home-owner-rate",
+      "label": "WA duties fact sheet - first home owner rate",
+      "url": "https://www.wa.gov.au/government/publications/duties-fact-sheet-first-home-owner-rate",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "wa-foreign-transfer-duty",
+      "label": "WA foreign transfer duty",
+      "url": "https://www.wa.gov.au/government/publications/foreign-transfer-duty",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "wa_first_home_home_region_required_unresolved_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 5,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "between", "min": 500000.01, "max": 750000 },
+          {
+            "field": "state_specific_inputs.wa_region",
+            "op": "not_in",
+            "value": ["metro_or_peel", "regional"]
+          }
+        ]
+      },
+      "calculation_method": "unresolved",
+      "fallback_url": "https://www.wa.gov.au/government/publications/duties-fact-sheet-first-home-owner-rate",
+      "source_refs": ["wa-first-home-owner-rate"],
+      "unresolved_reason": "WA first-home rates differ for metro/Peel and regional values above 500,000.",
+      "todo": "Pass state_specific_inputs.wa_region as metro_or_peel or regional."
+    },
+    {
+      "id": "wa_first_home_home_exemption_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "lte", "value": 500000 }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": null,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0
+        }
+      ],
+      "source_refs": ["wa-first-home-owner-rate"]
+    },
+    {
+      "id": "wa_first_home_home_metro_or_peel_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "between", "min": 500000.01, "max": 700000 },
+          { "field": "state_specific_inputs.wa_region", "op": "eq", "value": "metro_or_peel" }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": null,
+          "formula_type": "marginal",
+          "rate_per_100": 13.63,
+          "marginal_base_value": 500000
+        }
+      ],
+      "source_refs": ["wa-first-home-owner-rate"]
+    },
+    {
+      "id": "wa_first_home_home_regional_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "between", "min": 500000.01, "max": 750000 },
+          { "field": "state_specific_inputs.wa_region", "op": "eq", "value": "regional" }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": null,
+          "formula_type": "marginal",
+          "rate_per_100": 11.89,
+          "marginal_base_value": 500000
+        }
+      ],
+      "source_refs": ["wa-first-home-owner-rate"]
+    },
+    {
+      "id": "wa_first_home_vacant_land_exemption_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "lte", "value": 350000 }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": null,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0
+        }
+      ],
+      "source_refs": ["wa-first-home-owner-rate"]
+    },
+    {
+      "id": "wa_first_home_vacant_land_partial_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "between", "min": 350000.01, "max": 450000 }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": null,
+          "formula_type": "marginal",
+          "rate_per_100": 15.39,
+          "marginal_base_value": 350000
+        }
+      ],
+      "source_refs": ["wa-first-home-owner-rate"]
+    },
+    {
+      "id": "wa_owner_occupier_concessional_under_200k_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 15,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "lte", "value": 200000 }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 120000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.015
+        },
+        {
+          "min_value": 120000.01,
+          "max_value": 200000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 1800,
+          "rate_per_100": 4.04,
+          "marginal_base_value": 120000
+        }
+      ],
+      "source_refs": ["wa-transfer-duty"]
+    },
+    {
+      "id": "wa_general_2025_03_21",
+      "effective_from": "2025-03-21",
+      "effective_to": null,
+      "priority": 50,
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 120000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0.019
+        },
+        {
+          "min_value": 120000.01,
+          "max_value": 150000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 2280,
+          "rate_per_100": 2.85,
+          "marginal_base_value": 120000
+        },
+        {
+          "min_value": 150000.01,
+          "max_value": 360000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 3135,
+          "rate_per_100": 3.8,
+          "marginal_base_value": 150000
+        },
+        {
+          "min_value": 360000.01,
+          "max_value": null,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 11115,
+          "rate_per_100": 5.15,
+          "marginal_base_value": 360000
+        }
+      ],
+      "source_refs": ["wa-transfer-duty"]
+    },
+    {
+      "id": "wa_historical_unresolved_before_2025_03_21",
+      "effective_from": "1900-01-01",
+      "effective_to": "2025-03-20",
+      "priority": 100,
+      "calculation_method": "unresolved",
+      "fallback_url": "https://apps.osr.wa.gov.au/portal/0/calculators/transferduty",
+      "source_refs": ["wa-transfer-duty"],
+      "unresolved_reason": "Historical WA transfer duty rates before the 21 March 2025 first-home update are not fully versioned.",
+      "todo": "Backfill historical WA rate schedules and first-home threshold history."
+    }
+  ],
+  "concessions": [],
+  "surcharges": [
+    {
+      "id": "wa_foreign_transfer_duty_2019_01_01",
+      "name": "WA foreign transfer duty",
+      "effective_from": "2019-01-01",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 7,
+      "fallback_url": "https://www.wa.gov.au/government/publications/foreign-transfer-duty",
+      "source_refs": ["wa-foreign-transfer-duty"],
+      "notes": [
+        "Additional duty of 7% applies from 1 January 2019 to foreign persons acquiring residential property."
+      ]
+    }
+  ],
+  "notes": [
+    "WA general and concessional duty schedules are encoded from WA transfer duty and first-home fact sheet sources.",
+    "For first-home home values over 500,000, pass state_specific_inputs.wa_region as metro_or_peel or regional to avoid unresolved outcomes.",
+    "Pre-21 March 2025 historical WA schedules are retained as unresolved fallback pending full historical extraction."
+  ]
+}

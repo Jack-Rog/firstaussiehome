@@ -1,0 +1,423 @@
+{
+  "jurisdiction": "QLD",
+  "ruleset_version": "2026-03-10.qld.v2",
+  "currency": "AUD",
+  "inputs": [
+    { "key": "transaction_date", "type": "date", "required": true },
+    { "key": "property_value", "type": "number", "required": true },
+    {
+      "key": "property_type",
+      "type": "enum",
+      "required": true,
+      "enum_values": [
+        "established_home",
+        "new_home",
+        "vacant_land",
+        "off_the_plan_apartment",
+        "house_and_land_package",
+        "other"
+      ]
+    },
+    { "key": "first_home_buyer", "type": "boolean", "required": true },
+    { "key": "owner_occupier", "type": "boolean", "required": true },
+    { "key": "foreign_buyer", "type": "boolean", "required": false },
+    {
+      "key": "state_specific_inputs",
+      "type": "array",
+      "required": false,
+      "description": "Reserved for future QLD-specific parameters."
+    }
+  ],
+  "official_sources": [
+    {
+      "id": "qld-transfer-duty-rates",
+      "label": "QRO transfer duty rates",
+      "url": "https://qro.qld.gov.au/duties/transfer-duty/calculate/rates/",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "qld-home-concession-rates",
+      "label": "QRO transfer duty home concession rates",
+      "url": "https://qro.qld.gov.au/duties/transfer-duty/calculate/concession-rates/",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "qld-first-home",
+      "label": "QRO first home concession rates and thresholds",
+      "url": "https://qro.qld.gov.au/duties/transfer-duty/concessions/homes/first-home/current-and-previous-threshold-and-rates/",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "qld-first-home-vacant-land",
+      "label": "QRO first home vacant land concession rates and thresholds",
+      "url": "https://qro.qld.gov.au/duties/transfer-duty/concessions/vacant-land/first-home/current-and-previous-threshold-and-rates/",
+      "last_verified": "2026-03-10"
+    },
+    {
+      "id": "qld-afad-assessing",
+      "label": "QRO additional foreign acquirer duty (AFAD) assessing and calculating",
+      "url": "https://qro.qld.gov.au/duties/investors/afad/assessing/",
+      "last_verified": "2026-03-10"
+    }
+  ],
+  "base_duty_rules": [
+    {
+      "id": "qld_home_concession_rates_2024_06_09",
+      "effective_from": "2024-06-09",
+      "effective_to": null,
+      "priority": 10,
+      "applies_if": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 5000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0
+        },
+        {
+          "min_value": 5000.01,
+          "max_value": 350000,
+          "formula_type": "marginal",
+          "rate_per_100": 1,
+          "marginal_base_value": 5000
+        },
+        {
+          "min_value": 350000.01,
+          "max_value": 540000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 3450,
+          "rate_per_100": 3.5,
+          "marginal_base_value": 350000
+        },
+        {
+          "min_value": 540000.01,
+          "max_value": 1000000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 10100,
+          "rate_per_100": 4.5,
+          "marginal_base_value": 540000
+        },
+        {
+          "min_value": 1000000.01,
+          "max_value": null,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 30800,
+          "rate_per_100": 5.75,
+          "marginal_base_value": 1000000
+        }
+      ],
+      "source_refs": ["qld-home-concession-rates"]
+    },
+    {
+      "id": "qld_general_rates_2024_06_09",
+      "effective_from": "2024-06-09",
+      "effective_to": null,
+      "priority": 50,
+      "calculation_method": "brackets",
+      "rounding": "none",
+      "brackets": [
+        {
+          "min_value": 0,
+          "max_value": 5000,
+          "formula_type": "flat_rate_on_total",
+          "percent_of_total": 0
+        },
+        {
+          "min_value": 5000.01,
+          "max_value": 75000,
+          "formula_type": "marginal",
+          "rate_per_100": 1.5,
+          "marginal_base_value": 5000
+        },
+        {
+          "min_value": 75000.01,
+          "max_value": 540000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 1050,
+          "rate_per_100": 3.5,
+          "marginal_base_value": 75000
+        },
+        {
+          "min_value": 540000.01,
+          "max_value": 1000000,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 17325,
+          "rate_per_100": 4.5,
+          "marginal_base_value": 540000
+        },
+        {
+          "min_value": 1000000.01,
+          "max_value": null,
+          "formula_type": "fixed_plus_marginal",
+          "fixed_amount": 38025,
+          "rate_per_100": 5.75,
+          "marginal_base_value": 1000000
+        }
+      ],
+      "source_refs": ["qld-transfer-duty-rates"]
+    },
+    {
+      "id": "qld_historical_unresolved_before_2024_06_09",
+      "effective_from": "1900-01-01",
+      "effective_to": "2024-06-08",
+      "priority": 100,
+      "calculation_method": "unresolved",
+      "fallback_url": "https://qro.qld.gov.au/duties/transfer-duty/calculate/transfer-duty-estimator/",
+      "source_refs": ["qld-transfer-duty-rates"],
+      "unresolved_reason": "Pre-9 June 2024 historical transfer duty tables are not yet encoded in this ruleset.",
+      "todo": "Backfill pre-2024 transfer duty schedules from archived QRO rate tables."
+    }
+  ],
+  "concessions": [
+    {
+      "id": "qld_first_home_home_concession_2024_06_09",
+      "name": "Queensland first home concession (home)",
+      "effective_from": "2024-06-09",
+      "effective_to": null,
+      "priority": 10,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          },
+          { "field": "property_value", "op": "lt", "value": 800000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 0,
+          "max_value": 700000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 24525
+        },
+        {
+          "min_value": 700000.01,
+          "max_value": 710000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 21350
+        },
+        {
+          "min_value": 710000.01,
+          "max_value": 720000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 17875
+        },
+        {
+          "min_value": 720000.01,
+          "max_value": 730000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 14175
+        },
+        {
+          "min_value": 730000.01,
+          "max_value": 740000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 10250
+        },
+        {
+          "min_value": 740000.01,
+          "max_value": 750000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 6100
+        },
+        {
+          "min_value": 750000.01,
+          "max_value": 760000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 1725
+        },
+        {
+          "min_value": 760000.01,
+          "max_value": 799999.99,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 0
+        }
+      ],
+      "source_refs": ["qld-first-home"],
+      "notes": [
+        "QRO lists a nil concession amount where dutiable value is more than 760,000 and less than 800,000."
+      ]
+    },
+    {
+      "id": "qld_first_home_vacant_land_concession_2024_06_09",
+      "name": "Queensland first home concession (vacant land)",
+      "effective_from": "2024-06-09",
+      "effective_to": null,
+      "priority": 20,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "first_home_buyer", "op": "eq", "value": true },
+          { "field": "owner_occupier", "op": "eq", "value": true },
+          { "field": "property_type", "op": "eq", "value": "vacant_land" },
+          { "field": "property_value", "op": "lt", "value": 500000 }
+        ]
+      },
+      "effect_type": "replace_with_piecewise_formula",
+      "piecewise_effect_brackets": [
+        {
+          "min_value": 0,
+          "max_value": 350000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 10675
+        },
+        {
+          "min_value": 350000.01,
+          "max_value": 360000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 9350
+        },
+        {
+          "min_value": 360000.01,
+          "max_value": 370000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 7875
+        },
+        {
+          "min_value": 370000.01,
+          "max_value": 380000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 6250
+        },
+        {
+          "min_value": 380000.01,
+          "max_value": 390000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 4475
+        },
+        {
+          "min_value": 390000.01,
+          "max_value": 400000,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 2550
+        },
+        {
+          "min_value": 400000.01,
+          "max_value": 499999.99,
+          "effect_formula_type": "subtract_fixed_amount",
+          "subtract_amount": 0
+        }
+      ],
+      "source_refs": ["qld-first-home-vacant-land"]
+    }
+  ],
+  "surcharges": [
+    {
+      "id": "qld_afad_2024_07_01",
+      "name": "Queensland additional foreign acquirer duty",
+      "effective_from": "2024-07-01",
+      "effective_to": null,
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 8,
+      "fallback_url": "https://qro.qld.gov.au/duties/investors/afad/assessing/",
+      "source_refs": ["qld-afad-assessing"],
+      "notes": ["AFAD rate for transfer duty liabilities on or after 1 July 2024."]
+    },
+    {
+      "id": "qld_afad_2018_07_01",
+      "name": "Queensland additional foreign acquirer duty",
+      "effective_from": "2018-07-01",
+      "effective_to": "2024-06-30",
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 7,
+      "fallback_url": "https://qro.qld.gov.au/duties/investors/afad/assessing/",
+      "source_refs": ["qld-afad-assessing"],
+      "notes": ["AFAD rate for transfer duty liabilities from 1 July 2018 to 30 June 2024."]
+    },
+    {
+      "id": "qld_afad_2016_10_01",
+      "name": "Queensland additional foreign acquirer duty",
+      "effective_from": "2016-10-01",
+      "effective_to": "2018-06-30",
+      "eligibility": {
+        "operator": "AND",
+        "conditions": [
+          { "field": "foreign_buyer", "op": "eq", "value": true },
+          {
+            "field": "property_type",
+            "op": "in",
+            "value": [
+              "established_home",
+              "new_home",
+              "vacant_land",
+              "off_the_plan_apartment",
+              "house_and_land_package"
+            ]
+          }
+        ]
+      },
+      "calculation_method": "percent_of_value",
+      "percent": 3,
+      "fallback_url": "https://qro.qld.gov.au/duties/investors/afad/assessing/",
+      "source_refs": ["qld-afad-assessing"],
+      "notes": ["AFAD rate for transfer duty liabilities from 1 October 2016 to 30 June 2018."]
+    }
+  ],
+  "notes": [
+    "QLD base duty and home concession schedules are encoded from QRO transfer duty tables.",
+    "First-home concession amount tables are encoded for home and vacant-land pathways.",
+    "Transactions before 9 June 2024 remain unresolved until historical rate tables are versioned."
+  ]
+}

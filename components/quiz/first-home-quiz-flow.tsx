@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDisclosure } from "@/components/compliance/disclosure-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { deriveDutyIntakeState } from "@/src/lib/analysis/homeowner-duty-intake";
 import {
   buildHomeownerPathwayOutput,
   DEFAULT_HOMEOWNER_PATHWAY_INPUT,
@@ -16,93 +17,117 @@ import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
   type HomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
-import type { HomeownerPathwayInput, HomeownerPathwaySelections } from "@/src/lib/types";
-import {
-  annualiseAmount,
-  type Frequency,
-  formatCurrencyInput,
-  monthlyiseAmount,
-  parseMoneyInput,
-} from "@/src/lib/utils";
+import type {
+  DutyTier2FieldId,
+  HomeownerPathwayInput,
+  HomeownerPathwaySelections,
+} from "@/src/lib/types";
+import { formatCurrencyInput, parseMoneyInput } from "@/src/lib/utils";
 
-type Stage = "qualitative" | "quantitative" | "account";
+type Stage = "tier1" | "tier2" | "account";
 
-type QualitativeQuestionId =
-  | "firstHomeBuyer"
-  | "withoutOtherProperty"
+type Tier1QuestionId =
   | "homeState"
+  | "firstHomeBuyer"
+  | "ownerOccupier"
+  | "targetPropertyPrice"
   | "australianCitizenOrResident"
-  | "withoutDependants"
-  | "paygOnly"
-  | "withoutBusinessTrustIncome"
+  | "buyingSoloOrJoint"
+  | "foreignBuyer"
+  | "propertyTypeDetailed"
   | "buyingArea"
-  | "existingHome";
+  | "actHouseholdIncome"
+  | "dependentChildrenCount"
+  | "currentSavings";
 
-type QuantitativeQuestionId =
-  | "age"
-  | "annualSalary"
-  | "privateDebt"
-  | "hecsDebt"
-  | "currentSavings"
-  | "averageMonthlyExpenses"
-  | "targetPropertyPrice";
+type Tier1AnswerMap = Partial<Record<
+  Exclude<
+    Tier1QuestionId,
+    "targetPropertyPrice" | "actHouseholdIncome" | "currentSavings" | "dependentChildrenCount"
+  >,
+  boolean | string
+>>;
 
-type BooleanQuestion = {
-  type: "boolean";
-  id: Exclude<QualitativeQuestionId, "buyingArea">;
-  prompt: string;
-  applyYes: (current: HomeownerPathwayInput) => HomeownerPathwayInput;
-  applyNo: (current: HomeownerPathwayInput) => HomeownerPathwayInput;
+type DisplayDraft = {
+  targetPropertyPrice: string;
+  actHouseholdIncome: string;
+  currentSavings: string;
+  dependentChildrenCount: string;
 };
 
-type ChoiceQuestion = {
-  type: "choice";
-  id: "homeState" | "buyingArea";
-  prompt: string;
-  options: Array<{
-    value: string;
-    label: string;
-  }>;
-  applyChoice: (current: HomeownerPathwayInput, next: string) => HomeownerPathwayInput;
-};
+type Tier1Question =
+  | {
+      type: "boolean";
+      id: Exclude<
+        Tier1QuestionId,
+        | "homeState"
+        | "buyingSoloOrJoint"
+        | "propertyTypeDetailed"
+        | "buyingArea"
+        | "targetPropertyPrice"
+        | "actHouseholdIncome"
+        | "currentSavings"
+        | "dependentChildrenCount"
+      >;
+      prompt: string;
+      applyAnswer: (current: HomeownerPathwayInput, answer: boolean) => HomeownerPathwayInput;
+    }
+  | {
+      type: "choice";
+      id: Extract<Tier1QuestionId, "homeState" | "buyingSoloOrJoint" | "propertyTypeDetailed" | "buyingArea">;
+      prompt: string;
+      options: Array<{
+        value: string;
+        label: string;
+      }>;
+      applyAnswer: (current: HomeownerPathwayInput, answer: string) => HomeownerPathwayInput;
+    }
+  | {
+      type: "currency";
+      id: Extract<Tier1QuestionId, "targetPropertyPrice" | "actHouseholdIncome" | "currentSavings">;
+      prompt: string;
+      placeholder: string;
+    }
+  | {
+      type: "integer";
+      id: Extract<Tier1QuestionId, "dependentChildrenCount">;
+      prompt: string;
+      placeholder: string;
+    };
 
-type QualitativeQuestion = BooleanQuestion | ChoiceQuestion;
-
-type QuantitativeQuestion = {
-  id: QuantitativeQuestionId;
-  label: string;
-  placeholder: string;
-  frequencyKey?: "income" | "expense";
-};
-
-type QuantitativeBatch = {
-  title: string;
-  fields: QuantitativeQuestion[];
-};
+type Tier2Question =
+  | {
+      type: "choice";
+      id: Exclude<DutyTier2FieldId, "ntHouseAndLandEligiblePath" | "dependentChildrenCount">;
+      prompt: string;
+      options: Array<{
+        value: string;
+        label: string;
+      }>;
+      applyAnswer: (current: HomeownerPathwayInput, answer: string) => HomeownerPathwayInput;
+    }
+  | {
+      type: "boolean";
+      id: Extract<DutyTier2FieldId, "ntHouseAndLandEligiblePath">;
+      prompt: string;
+      applyAnswer: (current: HomeownerPathwayInput, answer: boolean) => HomeownerPathwayInput;
+    }
+  | {
+      type: "integer";
+      id: Extract<DutyTier2FieldId, "dependentChildrenCount">;
+      prompt: string;
+      placeholder: string;
+    };
 
 const QUIZ_STORAGE_KEY = "aussiesfirsthome:first-home-quiz";
 
-const QUALITATIVE_GROUPS: Array<{
+const TIER1_PAGES: Array<{
   title: string;
-  questions: QualitativeQuestion[];
+  questions: Tier1Question[];
 }> = [
   {
-    title: "A bit about you",
+    title: "Tier 1: Purchase basics",
     questions: [
-      {
-        type: "boolean",
-        id: "firstHomeBuyer",
-        prompt: "Is this your first home?",
-        applyYes: (current) => ({ ...current, firstHomeBuyer: true, existingProperty: false }),
-        applyNo: (current) => ({ ...current, firstHomeBuyer: false }),
-      },
-      {
-        type: "boolean",
-        id: "withoutOtherProperty",
-        prompt: "Are you buying without any other properties?",
-        applyYes: (current) => ({ ...current, existingProperty: false, firstHomeBuyer: true }),
-        applyNo: (current) => ({ ...current, existingProperty: true, firstHomeBuyer: false }),
-      },
       {
         type: "choice",
         id: "homeState",
@@ -117,101 +142,247 @@ const QUALITATIVE_GROUPS: Array<{
           { value: "act", label: "ACT" },
           { value: "nt", label: "NT" },
         ],
-        applyChoice: (current, next) => ({
+        applyAnswer: (current, answer) => ({
           ...current,
-          homeState: next as HomeownerPathwayInput["homeState"],
-          livingInNsw: next === "nsw",
+          homeState: answer as HomeownerPathwayInput["homeState"],
+          livingInNsw: answer === "nsw",
+        }),
+      },
+      {
+        type: "currency",
+        id: "targetPropertyPrice",
+        prompt: "What price are you aiming to buy at?",
+        placeholder: "$800,000",
+      },
+      {
+        type: "boolean",
+        id: "firstHomeBuyer",
+        prompt: "Is this your first home purchase?",
+        applyAnswer: (current, answer) => ({
+          ...current,
+          firstHomeBuyer: answer,
+          existingProperty: !answer,
+        }),
+      },
+      {
+        type: "boolean",
+        id: "ownerOccupier",
+        prompt: "Will at least one buyer live in the property as their home?",
+        applyAnswer: (current, answer) => ({
+          ...current,
+          ownerOccupier: answer,
+        }),
+      },
+    ],
+  },
+  {
+    title: "Tier 1: Buyer profile",
+    questions: [
+      {
+        type: "boolean",
+        id: "australianCitizenOrResident",
+        prompt: "Are all buyers Australian citizens or permanent residents?",
+        applyAnswer: (current, answer) => ({
+          ...current,
+          australianCitizenOrResident: answer,
+        }),
+      },
+      {
+        type: "choice",
+        id: "buyingSoloOrJoint",
+        prompt: "Are you buying alone or jointly?",
+        options: [
+          { value: "solo", label: "Buying alone" },
+          { value: "joint", label: "Buying jointly" },
+        ],
+        applyAnswer: (current, answer) => ({
+          ...current,
+          buyingSoloOrJoint: answer as HomeownerPathwayInput["buyingSoloOrJoint"],
+        }),
+      },
+      {
+        type: "boolean",
+        id: "foreignBuyer",
+        prompt: "Are all buyers not foreign persons for duty purposes?",
+        applyAnswer: (current, answer) => ({
+          ...current,
+          foreignBuyer: !answer,
+          foreignOwnershipMode: answer ? undefined : current.foreignOwnershipMode,
+        }),
+      },
+      {
+        type: "choice",
+        id: "propertyTypeDetailed",
+        prompt: "What are you buying?",
+        options: [
+          { value: "established-home", label: "Established home" },
+          { value: "new-home", label: "New home" },
+          { value: "vacant-land", label: "Vacant land" },
+          { value: "off-the-plan-home", label: "Off-the-plan home" },
+          { value: "house-and-land-package", label: "House-and-land package" },
+        ],
+        applyAnswer: (current, answer) => ({
+          ...current,
+          propertyTypeDetailed: answer as HomeownerPathwayInput["propertyTypeDetailed"],
+          buyingNewHome:
+            answer === "new-home" || answer === "off-the-plan-home" || answer === "house-and-land-package",
         }),
       },
       {
         type: "choice",
         id: "buyingArea",
-        prompt: "Is the property in a state capital or outside one?",
+        prompt: "Is the property in a state capital/metro area or outside one?",
         options: [
-          { value: "state-capital", label: "State capital" },
-          { value: "regional", label: "Regional / non-capital" },
+          { value: "state-capital", label: "State capital / metro" },
+          { value: "regional", label: "Outside the capital / metro" },
         ],
-        applyChoice: (current, next) => ({
+        applyAnswer: (current, answer) => ({
           ...current,
-          buyingArea: next as HomeownerPathwayInput["buyingArea"],
+          buyingArea: answer as HomeownerPathwayInput["buyingArea"],
         }),
       },
     ],
   },
   {
-    title: "The basics",
+    title: "Tier 1: Household numbers",
     questions: [
       {
-        type: "boolean",
-        id: "australianCitizenOrResident",
-        prompt: "Are you an Australian citizen or permanent resident?",
-        applyYes: (current) => ({ ...current, australianCitizenOrResident: true }),
-        applyNo: (current) => ({ ...current, australianCitizenOrResident: false }),
+        type: "currency",
+        id: "actHouseholdIncome",
+        prompt: "What is your household income from the previous financial year?",
+        placeholder: "$120,000",
       },
       {
-        type: "boolean",
-        id: "withoutDependants",
-        prompt: "Are you buying without dependants?",
-        applyYes: (current) => ({ ...current, dependants: false }),
-        applyNo: (current) => ({ ...current, dependants: true }),
-      },
-    ],
-  },
-  {
-    title: "Income shape",
-    questions: [
-      {
-        type: "boolean",
-        id: "paygOnly",
-        prompt: "Is your income PAYG income only?",
-        applyYes: (current) => ({ ...current, paygOnly: true }),
-        applyNo: (current) => ({ ...current, paygOnly: false }),
+        type: "integer",
+        id: "dependentChildrenCount",
+        prompt: "How many dependant children are in the household?",
+        placeholder: "0",
       },
       {
-        type: "boolean",
-        id: "withoutBusinessTrustIncome",
-        prompt: "Are you buying without business or trust income?",
-        applyYes: (current) => ({ ...current, businessIncome: false }),
-        applyNo: (current) => ({ ...current, businessIncome: true }),
-      },
-      {
-        type: "boolean",
-        id: "existingHome",
-        prompt: "Are you buying an existing home?",
-        applyYes: (current) => ({ ...current, buyingNewHome: false }),
-        applyNo: (current) => ({ ...current, buyingNewHome: true }),
+        type: "currency",
+        id: "currentSavings",
+        prompt: "How much do you already have saved?",
+        placeholder: "$50,000",
       },
     ],
   },
 ];
 
-const QUANTITATIVE_BATCHES: QuantitativeBatch[] = [
-  {
-    title: "Batch 1: Age, income, and expenses",
-    fields: [
-      { id: "age", label: "How old are you?", placeholder: "Age" },
-      { id: "annualSalary", label: "What is your before-tax income?", placeholder: "$60,000", frequencyKey: "income" },
-      {
-        id: "averageMonthlyExpenses",
-        label: "What are your expected expenses?",
-        placeholder: "Weekly/Monthly/Annual Expenses",
-        frequencyKey: "expense",
-      },
+const TIER2_QUESTION_BY_FIELD: Record<DutyTier2FieldId, Tier2Question> = {
+  buyerEntityType: {
+    type: "choice",
+    id: "buyerEntityType",
+    prompt: "Are all buyers individuals rather than a trust, company, SMSF, or corporate trustee?",
+    options: [
+      { value: "individuals", label: "All buyers are individuals" },
+      { value: "trust", label: "Trust involved" },
+      { value: "company", label: "Company involved" },
+      { value: "smsf", label: "SMSF involved" },
+      { value: "corporate-trustee", label: "Corporate trustee involved" },
     ],
+    applyAnswer: (current, answer) => ({
+      ...current,
+      buyerEntityType: answer as HomeownerPathwayInput["buyerEntityType"],
+    }),
   },
-  {
-    title: "Batch 2: Savings and current debt",
-    fields: [
-      { id: "currentSavings", label: "How much do you already have saved?", placeholder: "$10,000" },
-      { id: "privateDebt", label: "How much private debt do you have?", placeholder: "$10,000" },
-      { id: "hecsDebt", label: "How much HECS / HELP debt do you have?", placeholder: "$10,000" },
+  jointEligibilityAligned: {
+    type: "choice",
+    id: "jointEligibilityAligned",
+    prompt: "If buying jointly, do all buyers have the same first-home, residency, and foreign-buyer status?",
+    options: [
+      { value: "true", label: "Yes, profiles align" },
+      { value: "false", label: "No, profiles differ" },
     ],
+    applyAnswer: (current, answer) => ({
+      ...current,
+      jointEligibilityAligned: answer === "true",
+    }),
   },
-  {
-    title: "Batch 3: Target property",
-    fields: [{ id: "targetPropertyPrice", label: "What price are you aiming to buy at?", placeholder: "$1,000,000" }],
+  foreignOwnershipMode: {
+    type: "choice",
+    id: "foreignOwnershipMode",
+    prompt: "If any buyer is foreign, will the foreign buyer own the full purchase or only part of it?",
+    options: [
+      { value: "full", label: "Full purchase" },
+      { value: "partial", label: "Partial ownership only" },
+    ],
+    applyAnswer: (current, answer) => ({
+      ...current,
+      foreignOwnershipMode: answer as HomeownerPathwayInput["foreignOwnershipMode"],
+    }),
   },
-];
+  waRegion: {
+    type: "choice",
+    id: "waRegion",
+    prompt: "Is the property in Perth/Peel or outside Perth/Peel?",
+    options: [
+      { value: "perth-peel", label: "Perth / Peel" },
+      { value: "outside-perth-peel", label: "Outside Perth / Peel" },
+    ],
+    applyAnswer: (current, answer) => ({
+      ...current,
+      waRegion: answer as HomeownerPathwayInput["waRegion"],
+    }),
+  },
+  qldConcessionPath: {
+    type: "choice",
+    id: "qldConcessionPath",
+    prompt: "Which Queensland path best fits?",
+    options: [
+      { value: "home-concession", label: "Home concession" },
+      { value: "first-home-home-concession", label: "First-home home concession" },
+      { value: "first-home-vacant-land-concession", label: "First-home vacant land concession" },
+      { value: "no-concession-path", label: "No concession path" },
+    ],
+    applyAnswer: (current, answer) => ({
+      ...current,
+      qldConcessionPath: answer as HomeownerPathwayInput["qldConcessionPath"],
+    }),
+  },
+  saReliefPath: {
+    type: "choice",
+    id: "saReliefPath",
+    prompt: "If seeking South Australia first-home relief, which path fits?",
+    options: [
+      { value: "new-home", label: "New home" },
+      { value: "off-the-plan-apartment", label: "Off-the-plan apartment" },
+      { value: "vacant-land", label: "Vacant land" },
+      { value: "none", label: "None of those" },
+    ],
+    applyAnswer: (current, answer) => ({
+      ...current,
+      saReliefPath: answer as HomeownerPathwayInput["saReliefPath"],
+    }),
+  },
+  dependentChildrenCount: {
+    type: "integer",
+    id: "dependentChildrenCount",
+    prompt: "Confirm the exact number of dependant children for the household.",
+    placeholder: "0",
+  },
+  ntHouseAndLandEligiblePath: {
+    type: "boolean",
+    id: "ntHouseAndLandEligiblePath",
+    prompt: "Is this a house-and-land package that may fall under the targeted exemption path?",
+    applyAnswer: (current, answer) => ({
+      ...current,
+      ntHouseAndLandEligiblePath: answer,
+    }),
+  },
+};
+
+const SUPPORT_CHALLENGE_OPTIONS = [
+  { key: "deposit-need", label: "Figuring out how much deposit I actually need" },
+  { key: "saving-consistently", label: "Saving consistently for the deposit" },
+  { key: "invest-or-save", label: "Deciding whether to invest or save" },
+  { key: "debt-vs-saving", label: "Paying off debt vs saving" },
+  { key: "understanding-schemes", label: "Understanding government schemes" },
+  { key: "affordable-price-range", label: "Knowing what price range I can afford" },
+  { key: "long-term-plan", label: "Building a long-term financial plan" },
+  { key: "something-else", label: "Something else" },
+] as const;
+
+type SupportChallengeKey = (typeof SUPPORT_CHALLENGE_OPTIONS)[number]["key"];
 
 function buildDefaultSelections(input: HomeownerPathwayInput): HomeownerPathwaySelections {
   const preview = buildHomeownerPathwayOutput(input, {
@@ -237,92 +408,110 @@ function buildDefaultSelections(input: HomeownerPathwayInput): HomeownerPathwayS
   };
 }
 
-function applyDisplayValue(
+function getInitialDisplay(): DisplayDraft {
+  return {
+    targetPropertyPrice: "",
+    actHouseholdIncome: "",
+    currentSavings: "",
+    dependentChildrenCount: "",
+  };
+}
+
+function formatTier1Answer(questionId: Tier1Question["id"], value: string) {
+  if (questionId === "dependentChildrenCount") {
+    return value.replace(/[^\d]/g, "");
+  }
+
+  return value.trim().length === 0 ? "" : formatCurrencyInput(parseMoneyInput(value));
+}
+
+function applyNumericDisplay(
   current: HomeownerPathwayInput,
-  field: QuantitativeQuestionId,
+  fieldId: keyof DisplayDraft,
   displayValue: string,
-  incomeFrequency: Frequency,
-  expenseFrequency: Frequency,
 ) {
-  if (field === "age") {
+  if (fieldId === "dependentChildrenCount") {
+    const count = displayValue.trim().length === 0 ? undefined : Number(displayValue);
+
     return {
       ...current,
-      age: Number(displayValue.replace(/[^0-9]/g, "") || "0"),
+      dependentChildrenCount: count,
+      dependants: (count ?? 0) > 0,
     };
   }
 
   const parsed = parseMoneyInput(displayValue);
 
-  if (field === "annualSalary") {
-    return {
-      ...current,
-      annualSalary: annualiseAmount(parsed, incomeFrequency),
-    };
-  }
-
-  if (field === "averageMonthlyExpenses") {
-    return {
-      ...current,
-      averageMonthlyExpenses: monthlyiseAmount(parsed, expenseFrequency),
-    };
-  }
-
   return {
     ...current,
-    [field]: parsed,
+    [fieldId]: parsed,
   };
 }
 
-function formatLiveValue(field: QuantitativeQuestionId, raw: string) {
-  if (field === "age") {
-    return raw.replace(/[^0-9]/g, "");
+function isTier1QuestionAnswered(
+  question: Tier1Question,
+  answers: Tier1AnswerMap,
+  display: DisplayDraft,
+) {
+  if (question.type === "currency" || question.type === "integer") {
+    return display[question.id].trim().length > 0;
   }
 
-  const parsed = parseMoneyInput(raw);
-  return raw.trim().length === 0 ? "" : formatCurrencyInput(parsed);
+  return question.id in answers;
 }
 
-function expensePlaceholderForFrequency(frequency: Frequency) {
-  if (frequency === "weekly") {
-    return "Weekly Expenses";
+function isTier2QuestionAnswered(question: Tier2Question, input: HomeownerPathwayInput, display: DisplayDraft) {
+  if (question.type === "integer") {
+    return display.dependentChildrenCount.trim().length > 0;
   }
 
-  if (frequency === "annually") {
-    return "Annual Expenses";
+  const value = input[question.id];
+
+  if (typeof value === "boolean") {
+    return true;
   }
 
-  return "Monthly Expenses";
+  return typeof value === "string" && value.length > 0;
+}
+
+function optionButtonClass(active: boolean) {
+  return active
+    ? "bg-primary text-white shadow-[0_8px_20px_rgba(74,124,89,0.3)]"
+    : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted";
 }
 
 export function FirstHomeQuizFlow() {
   const router = useRouter();
   const { setDisclosure } = useDisclosure();
-  const [stage, setStage] = useState<Stage>("qualitative");
-  const [qualitativeGroupIndex, setQualitativeGroupIndex] = useState(0);
-  const [quantitativeBatchIndex, setQuantitativeBatchIndex] = useState(0);
+  const [stage, setStage] = useState<Stage>("tier1");
+  const [tier1PageIndex, setTier1PageIndex] = useState(0);
   const [input, setInput] = useState<HomeownerPathwayInput>({
     ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
     livingInNsw: true,
   });
-  const [qualitativeAnswers, setQualitativeAnswers] = useState<Partial<Record<QualitativeQuestionId, boolean | string>>>({});
-  const [incomeFrequency, setIncomeFrequency] = useState<Frequency>("annually");
-  const [expenseFrequency, setExpenseFrequency] = useState<Frequency>("monthly");
-  const [quantitativeDisplay, setQuantitativeDisplay] = useState<Record<QuantitativeQuestionId, string>>({
-    age: "",
-    annualSalary: "",
-    privateDebt: "",
-    hecsDebt: "",
-    currentSavings: "",
-    averageMonthlyExpenses: "",
-    targetPropertyPrice: "",
-  });
-  const [accountName, setAccountName] = useState("");
-  const [accountEmail, setAccountEmail] = useState("");
-  const [accountStory, setAccountStory] = useState("");
+  const [tier1Answers, setTier1Answers] = useState<Tier1AnswerMap>({});
+  const [display, setDisplay] = useState<DisplayDraft>(getInitialDisplay());
+  const [supportName, setSupportName] = useState("");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportTried, setSupportTried] = useState("");
+  const [supportChallenge, setSupportChallenge] = useState<SupportChallengeKey | null>(null);
+  const [supportFrustration, setSupportFrustration] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
+  const [supportError, setSupportError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const tier1Page = TIER1_PAGES[tier1PageIndex] ?? TIER1_PAGES[0];
+  const dutyIntake = useMemo(() => deriveDutyIntakeState(input), [input]);
+  const tier2Questions = useMemo(
+    () => dutyIntake.visibleTier2Fields.map((fieldId) => TIER2_QUESTION_BY_FIELD[fieldId]),
+    [dutyIntake.visibleTier2Fields],
+  );
   const previewSelections = useMemo(() => buildDefaultSelections(input), [input]);
   const preview = useMemo(() => buildHomeownerPathwayOutput(input, previewSelections), [input, previewSelections]);
+  const canContinueTier1 = tier1Page.questions.every((question) => isTier1QuestionAnswered(question, tier1Answers, display));
+  const canContinueTier2 = tier2Questions.every((question) => isTier2QuestionAnswered(question, input, display));
+  const stageLabels = dutyIntake.needsTier2 ? ["Tier 1", "Tier 2", "Final details"] : ["Tier 1", "Final details"];
+  const currentStagePosition =
+    stage === "tier1" ? 0 : stage === "tier2" && dutyIntake.needsTier2 ? 1 : stageLabels.length - 1;
 
   useEffect(() => {
     setDisclosure({
@@ -345,35 +534,22 @@ export function FirstHomeQuizFlow() {
     try {
       const saved = JSON.parse(raw) as {
         stage?: Stage;
-        qualitativeGroupIndex?: number;
-        quantitativeBatchIndex?: number;
-        quantitativeIndex?: number;
+        tier1PageIndex?: number;
         input?: HomeownerPathwayInput;
-        qualitativeAnswers?: Partial<Record<QualitativeQuestionId, boolean | string>>;
-        incomeFrequency?: Frequency;
-        expenseFrequency?: Frequency;
-        quantitativeDisplay?: Record<QuantitativeQuestionId, string>;
-        accountName?: string;
-        accountEmail?: string;
-        accountStory?: string;
+        tier1Answers?: Tier1AnswerMap;
+        display?: DisplayDraft;
+        supportName?: string;
+        supportEmail?: string;
+        supportTried?: string;
+        supportChallenge?: SupportChallengeKey | null;
+        supportFrustration?: 1 | 2 | 3 | 4 | 5 | null;
       };
 
       if (saved.stage) {
         setStage(saved.stage);
       }
-      if (typeof saved.qualitativeGroupIndex === "number") {
-        setQualitativeGroupIndex(saved.qualitativeGroupIndex);
-      }
-      if (typeof saved.quantitativeBatchIndex === "number") {
-        setQuantitativeBatchIndex(saved.quantitativeBatchIndex);
-      } else if (typeof saved.quantitativeIndex === "number") {
-        if (saved.quantitativeIndex <= 2) {
-          setQuantitativeBatchIndex(0);
-        } else if (saved.quantitativeIndex <= 5) {
-          setQuantitativeBatchIndex(1);
-        } else {
-          setQuantitativeBatchIndex(2);
-        }
+      if (typeof saved.tier1PageIndex === "number") {
+        setTier1PageIndex(saved.tier1PageIndex);
       }
       if (saved.input) {
         const savedHomeState = saved.input.homeState ?? (saved.input.livingInNsw === false ? "vic" : "nsw");
@@ -384,26 +560,29 @@ export function FirstHomeQuizFlow() {
           livingInNsw: savedHomeState === "nsw",
         });
       }
-      if (saved.qualitativeAnswers) {
-        setQualitativeAnswers(saved.qualitativeAnswers);
+      if (saved.tier1Answers) {
+        setTier1Answers(saved.tier1Answers);
       }
-      if (saved.incomeFrequency) {
-        setIncomeFrequency(saved.incomeFrequency);
+      if (saved.display) {
+        setDisplay((current) => ({
+          ...current,
+          ...saved.display,
+        }));
       }
-      if (saved.expenseFrequency) {
-        setExpenseFrequency(saved.expenseFrequency);
+      if (saved.supportName) {
+        setSupportName(saved.supportName);
       }
-      if (saved.quantitativeDisplay) {
-        setQuantitativeDisplay(saved.quantitativeDisplay);
+      if (saved.supportEmail) {
+        setSupportEmail(saved.supportEmail);
       }
-      if (saved.accountName) {
-        setAccountName(saved.accountName);
+      if (saved.supportTried) {
+        setSupportTried(saved.supportTried);
       }
-      if (saved.accountEmail) {
-        setAccountEmail(saved.accountEmail);
+      if (saved.supportChallenge) {
+        setSupportChallenge(saved.supportChallenge);
       }
-      if (saved.accountStory) {
-        setAccountStory(saved.accountStory);
+      if (saved.supportFrustration) {
+        setSupportFrustration(saved.supportFrustration);
       }
     } catch {
       window.localStorage.removeItem(QUIZ_STORAGE_KEY);
@@ -420,16 +599,15 @@ export function FirstHomeQuizFlow() {
         QUIZ_STORAGE_KEY,
         JSON.stringify({
           stage,
-          qualitativeGroupIndex,
-          quantitativeBatchIndex,
+          tier1PageIndex,
           input,
-          qualitativeAnswers,
-          incomeFrequency,
-          expenseFrequency,
-          quantitativeDisplay,
-          accountName,
-          accountEmail,
-          accountStory,
+          tier1Answers,
+          display,
+          supportName,
+          supportEmail,
+          supportTried,
+          supportChallenge,
+          supportFrustration,
         }),
       );
     }, 150);
@@ -439,135 +617,96 @@ export function FirstHomeQuizFlow() {
     };
   }, [
     stage,
-    qualitativeGroupIndex,
-    quantitativeBatchIndex,
+    tier1PageIndex,
     input,
-    qualitativeAnswers,
-    incomeFrequency,
-    expenseFrequency,
-    quantitativeDisplay,
-    accountName,
-    accountEmail,
-    accountStory,
+    tier1Answers,
+    display,
+    supportName,
+    supportEmail,
+    supportTried,
+    supportChallenge,
+    supportFrustration,
   ]);
 
-  const activeGroup = QUALITATIVE_GROUPS[qualitativeGroupIndex] ?? QUALITATIVE_GROUPS[0];
-  const canAdvanceQualitative = activeGroup.questions.every((question) => question.id in qualitativeAnswers);
-  const activeQuantitativeBatch = QUANTITATIVE_BATCHES[quantitativeBatchIndex];
-  const canAdvanceQuantitative =
-    activeQuantitativeBatch?.fields.every(
-      (field) => quantitativeDisplay[field.id].trim().length > 0,
-    ) ?? false;
+  useEffect(() => {
+    if (stage === "tier2" && !dutyIntake.needsTier2) {
+      setStage("account");
+    }
+  }, [dutyIntake.needsTier2, stage]);
 
-  function answerBoolean(question: BooleanQuestion, answer: boolean) {
-    setInput((current) => (answer ? question.applyYes(current) : question.applyNo(current)));
-    setQualitativeAnswers((current) => ({
+  function answerTier1Boolean(
+    question: Extract<Tier1Question, { type: "boolean" }>,
+    answer: boolean,
+  ) {
+    setInput((current) => question.applyAnswer(current, answer));
+    setTier1Answers((current) => ({
       ...current,
       [question.id]: answer,
     }));
   }
 
-  function answerChoice(question: ChoiceQuestion, answer: string) {
-    setInput((current) => question.applyChoice(current, answer));
-    setQualitativeAnswers((current) => ({
+  function answerTier1Choice(
+    question: Extract<Tier1Question, { type: "choice" }>,
+    answer: string,
+  ) {
+    setInput((current) => question.applyAnswer(current, answer));
+    setTier1Answers((current) => ({
       ...current,
       [question.id]: answer,
     }));
   }
 
-  function goNextQualitative() {
-    if (!canAdvanceQualitative) {
-      return;
-    }
+  function answerTier1Display(fieldId: keyof DisplayDraft, raw: string) {
+    const formatted = formatTier1Answer(fieldId as Tier1Question["id"], raw);
 
-    if (qualitativeGroupIndex < QUALITATIVE_GROUPS.length - 1) {
-      setQualitativeGroupIndex((current) => current + 1);
-      return;
-    }
-
-    setQuantitativeBatchIndex(0);
-    setStage("quantitative");
-  }
-
-  function goBackQualitative() {
-    if (qualitativeGroupIndex > 0) {
-      setQualitativeGroupIndex((current) => current - 1);
-    }
-  }
-
-  function updateQuantitativeValue(field: QuantitativeQuestionId, raw: string) {
-    const formatted = formatLiveValue(field, raw);
-    setQuantitativeDisplay((current) => ({
+    setDisplay((current) => ({
       ...current,
-      [field]: formatted,
+      [fieldId]: formatted,
     }));
-    setInput((current) => applyDisplayValue(current, field, formatted, incomeFrequency, expenseFrequency));
+    setInput((current) => applyNumericDisplay(current, fieldId, formatted));
   }
 
-  function updateFrequency(kind: "income" | "expense", next: Frequency) {
-    if (kind === "income") {
-      setIncomeFrequency(next);
-      setQuantitativeDisplay((current) => ({
-        ...current,
-        annualSalary:
-          current.annualSalary.trim().length === 0
-            ? ""
-            : formatCurrencyInput(
-                next === "annually"
-                  ? input.annualSalary
-                  : next === "monthly"
-                    ? input.annualSalary / 12
-                    : input.annualSalary / 52,
-              ),
-      }));
-      return;
-    }
-
-    setExpenseFrequency(next);
-    setQuantitativeDisplay((current) => ({
-      ...current,
-      averageMonthlyExpenses:
-        current.averageMonthlyExpenses.trim().length === 0
-          ? ""
-          : formatCurrencyInput(
-              next === "monthly"
-                ? input.averageMonthlyExpenses
-                : next === "annually"
-                  ? input.averageMonthlyExpenses * 12
-                  : (input.averageMonthlyExpenses * 12) / 52,
-            ),
-    }));
+  function answerTier2Choice(
+    question: Extract<Tier2Question, { type: "choice" }>,
+    answer: string,
+  ) {
+    setInput((current) => question.applyAnswer(current, answer));
   }
 
-  function goNextQuantitative() {
-    if (!canAdvanceQuantitative) {
-      return;
-    }
-
-    if (quantitativeBatchIndex < QUANTITATIVE_BATCHES.length - 1) {
-      setQuantitativeBatchIndex((current) => current + 1);
-      return;
-    }
-
-    setStage("account");
+  function answerTier2Boolean(
+    question: Extract<Tier2Question, { type: "boolean" }>,
+    answer: boolean,
+  ) {
+    setInput((current) => question.applyAnswer(current, answer));
   }
 
-  function goBackQuantitative() {
-    if (quantitativeBatchIndex > 0) {
-      setQuantitativeBatchIndex((current) => current - 1);
+  function goNextTier1() {
+    if (!canContinueTier1) {
       return;
     }
 
-    setStage("qualitative");
-    setQualitativeGroupIndex(QUALITATIVE_GROUPS.length - 1);
+    if (tier1PageIndex < TIER1_PAGES.length - 1) {
+      setTier1PageIndex((current) => current + 1);
+      return;
+    }
+
+    setStage(dutyIntake.needsTier2 ? "tier2" : "account");
+  }
+
+  function goBackTier1() {
+    if (tier1PageIndex > 0) {
+      setTier1PageIndex((current) => current - 1);
+    }
+  }
+
+  function goBackTier2() {
+    setStage("tier1");
+    setTier1PageIndex(TIER1_PAGES.length - 1);
   }
 
   async function createAccountAndContinue() {
-    if (!accountName.trim() || !accountEmail.trim() || !accountStory.trim()) {
-      return;
-    }
-
     setIsSubmitting(true);
+    setSupportError(null);
 
     const dashboardSelections = buildDefaultSelections(input);
     const withSchemes = buildHomeownerPathwayOutput(input, dashboardSelections);
@@ -582,21 +721,40 @@ export function FirstHomeQuizFlow() {
       input,
       selections: dashboardSelections,
       account: {
-        name: accountName.trim(),
-        email: accountEmail.trim(),
-        story: accountStory.trim(),
+        name: supportName.trim() || "there",
+        email: supportEmail.trim(),
+        story: supportTried.trim(),
       },
-      incomeFrequency,
-      expenseFrequency,
+      incomeFrequency: "annually",
+      expenseFrequency: "monthly",
       sentAt: new Date().toISOString(),
     };
 
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
-      window.localStorage.removeItem(QUIZ_STORAGE_KEY);
-    }
-
     try {
+      const supportResponse = await fetch("/api/quiz/dashboard-support", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          challenge: supportChallenge,
+          frustrationLevel: supportFrustration,
+          name: supportName.trim() || null,
+          email: supportEmail.trim() || null,
+          comment: supportTried.trim() || null,
+          sourcePage: "/First-Home-Quiz",
+        }),
+      });
+
+      if (!supportResponse.ok) {
+        throw new Error("Failed to save support survey response");
+      }
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
+        window.localStorage.removeItem(QUIZ_STORAGE_KEY);
+      }
+
       await fetch("/api/homeowner-summary", {
         method: "POST",
         headers: {
@@ -609,10 +767,15 @@ export function FirstHomeQuizFlow() {
           withoutSchemes,
         }),
       });
+    } catch {
+      setSupportError("We could not save your response. Please try again.");
+      setIsSubmitting(false);
+      return;
     } finally {
       setIsSubmitting(false);
-      router.push("/first-home-dashboard");
     }
+
+    router.push("/first-home-dashboard");
   }
 
   return (
@@ -621,26 +784,22 @@ export function FirstHomeQuizFlow() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
-              {stage === "qualitative" ? activeGroup.title : stage === "quantitative" ? "Your numbers" : "Final details"}
+              {stage === "tier1" ? tier1Page.title : stage === "tier2" ? "Tier 2: Duty details" : "Final details"}
             </p>
             <p className="mt-1 text-sm text-foreground-soft">
-              {stage === "qualitative"
-                ? `Batch ${qualitativeGroupIndex + 1} of ${QUALITATIVE_GROUPS.length}`
-                : stage === "quantitative"
-                  ? `Batch ${quantitativeBatchIndex + 1} of ${QUANTITATIVE_BATCHES.length}`
+              {stage === "tier1"
+                ? `Page ${tier1PageIndex + 1} of ${TIER1_PAGES.length}`
+                : stage === "tier2"
+                  ? "Only shown when duty needs more detail"
                   : "One last step before the dashboard"}
             </p>
           </div>
           <div className="flex gap-2">
-            {[1, 2, 3].map((dot) => (
+            {stageLabels.map((label, index) => (
               <span
-                key={dot}
+                key={label}
                 className={`h-2.5 w-8 rounded-full transition-colors ${
-                  (stage === "qualitative" && dot <= 1) ||
-                  (stage === "quantitative" && dot <= 2) ||
-                  (stage === "account" && dot <= 3)
-                    ? "bg-primary"
-                    : "bg-primary/15"
+                  index <= currentStagePosition ? "bg-primary" : "bg-primary/15"
                 }`}
               />
             ))}
@@ -648,27 +807,25 @@ export function FirstHomeQuizFlow() {
         </div>
       </section>
 
-      {stage === "qualitative" ? (
+      {stage === "tier1" ? (
         <section className="space-y-4">
-          {activeGroup.questions.map((question) => {
-            const answer = qualitativeAnswers[question.id];
-
+          {tier1Page.questions.map((question) => {
             if (question.type === "choice") {
+              const answer = tier1Answers[question.id];
+
               return (
                 <Card key={question.id} className="animate-fade-up space-y-4 bg-white p-6">
                   <p className="text-xl font-semibold tracking-tight">{question.prompt}</p>
-                  <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     {question.options.map((option) => (
                       <button
                         key={option.value}
                         type="button"
                         data-testid={`quiz-${question.id}-${option.value}`}
-                        className={`rounded-xl px-5 py-4 text-sm font-semibold transition-all ${
-                          answer === option.value
-                            ? "bg-primary text-white shadow-[0_8px_20px_rgba(74,124,89,0.3)]"
-                            : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted"
-                        }`}
-                        onClick={() => answerChoice(question, option.value)}
+                        className={`rounded-xl px-5 py-4 text-sm font-semibold transition-all ${optionButtonClass(
+                          answer === option.value,
+                        )}`}
+                        onClick={() => answerTier1Choice(question, option.value)}
                       >
                         {option.label}
                       </button>
@@ -678,111 +835,174 @@ export function FirstHomeQuizFlow() {
               );
             }
 
+            if (question.type === "boolean") {
+              const answer = tier1Answers[question.id];
+
+              return (
+                <Card key={question.id} className="animate-fade-up space-y-4 bg-white p-6">
+                  <p className="text-xl font-semibold tracking-tight">{question.prompt}</p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      data-testid={`quiz-${question.id}-yes`}
+                      className={`rounded-xl px-5 py-3 text-sm font-semibold transition-all ${optionButtonClass(
+                        answer === true,
+                      )}`}
+                      onClick={() => answerTier1Boolean(question, true)}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      data-testid={`quiz-${question.id}-no`}
+                      className={`rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
+                        answer === false
+                          ? "bg-[#7a4a43] text-white"
+                          : "bg-[#f7f1ed] text-foreground ring-1 ring-border hover:bg-[#efe7e0]"
+                      }`}
+                      onClick={() => answerTier1Boolean(question, false)}
+                    >
+                      No
+                    </button>
+                  </div>
+                </Card>
+              );
+            }
+
             return (
               <Card key={question.id} className="animate-fade-up space-y-4 bg-white p-6">
-                <p className="text-xl font-semibold tracking-tight">{question.prompt}</p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    data-testid={`quiz-${question.id}-yes`}
-                    className={`rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
-                      answer === true
-                        ? "bg-primary text-white shadow-[0_8px_20px_rgba(74,124,89,0.3)]"
-                        : "bg-[#f0f5ec] text-foreground ring-1 ring-border hover:bg-[#e8efe2]"
-                    }`}
-                    onClick={() => answerBoolean(question, true)}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    data-testid={`quiz-${question.id}-no`}
-                    className={`rounded-xl px-5 py-3 text-sm font-semibold transition-all ${
-                      answer === false ? "bg-[#7a4a43] text-white" : "bg-[#f7f1ed] text-foreground ring-1 ring-border hover:bg-[#efe7e0]"
-                    }`}
-                    onClick={() => answerBoolean(question, false)}
-                  >
-                    No
-                  </button>
-                </div>
+                <label className="grid gap-2">
+                  <span className="text-xl font-semibold tracking-tight">{question.prompt}</span>
+                  <Input
+                    data-testid={`quiz-${question.id}`}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={question.placeholder}
+                    className="h-14 text-xl placeholder:text-[#9aa097]"
+                    value={display[question.id]}
+                    onChange={(event) => answerTier1Display(question.id, event.currentTarget.value)}
+                  />
+                </label>
               </Card>
             );
           })}
 
           <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="secondary" onClick={goBackQualitative} disabled={qualitativeGroupIndex === 0}>
+            <Button type="button" variant="secondary" onClick={goBackTier1} disabled={tier1PageIndex === 0}>
               <ChevronLeft className="mr-1 h-4 w-4" />
               Back
             </Button>
-            <Button data-testid="qual-batch-continue" type="button" onClick={goNextQualitative} disabled={!canAdvanceQualitative}>
+            <Button data-testid="tier1-continue" type="button" onClick={goNextTier1} disabled={!canContinueTier1}>
               Continue
             </Button>
           </div>
         </section>
       ) : null}
 
-      {stage === "quantitative" && activeQuantitativeBatch ? (
+      {stage === "tier2" ? (
         <Card className="animate-fade-up space-y-6 bg-white p-6 md:p-8">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
-              Batch {quantitativeBatchIndex + 1}
-            </p>
-            <h2 className="text-2xl font-semibold tracking-tight">{activeQuantitativeBatch.title}</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Tier 2</p>
+            <h2 className="text-2xl font-semibold tracking-tight">Duty details that change the calculation path</h2>
             <p className="text-sm text-foreground-soft">
-              Broad tax caveat: we use a simple tax scenario for estimate-only modelling.
+              We only ask these when the Tier 1 answers move into a higher-complexity duty path.
             </p>
           </div>
 
-          <div className="grid gap-4">
-            {activeQuantitativeBatch.fields.map((field) => (
-              <label key={field.id} className="grid gap-2">
-                <span className="text-sm font-semibold">{field.label}</span>
-                {field.frequencyKey ? (
-                  <div className="flex flex-wrap gap-2">
-                    {(["weekly", "monthly", "annually"] as const).map((frequency) => {
-                      const currentFrequency =
-                        field.frequencyKey === "income" ? incomeFrequency : expenseFrequency;
+          {dutyIntake.hasTier3EdgeCase ? (
+            <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
+              Broad assumption used for this duty path even after Tier 2. {dutyIntake.reasons.join(" ")}
+            </div>
+          ) : null}
 
-                      return (
+          <div className="grid gap-4">
+            {tier2Questions.map((question) => {
+              if (question.type === "choice") {
+                const answer = input[question.id];
+
+                return (
+                  <div key={question.id} className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+                    <p className="text-base font-semibold">{question.prompt}</p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                      {question.options.map((option) => (
                         <button
-                          key={`${field.id}-${frequency}`}
+                          key={option.value}
                           type="button"
-                          className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
-                            currentFrequency === frequency
-                              ? "bg-primary text-white"
-                              : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted"
-                          }`}
-                          onClick={() => updateFrequency(field.frequencyKey!, frequency)}
+                          data-testid={`quiz-tier2-${question.id}-${option.value}`}
+                          className={`rounded-xl px-4 py-3 text-sm font-semibold transition-all ${optionButtonClass(
+                            answer === option.value || String(answer) === option.value,
+                          )}`}
+                          onClick={() => answerTier2Choice(question, option.value)}
                         >
-                          {frequency}
+                          {option.label}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
-                ) : null}
-                <Input
-                  data-testid={`quiz-${field.id}`}
-                  type="text"
-                  inputMode="numeric"
-                  placeholder={
-                    field.id === "averageMonthlyExpenses"
-                      ? expensePlaceholderForFrequency(expenseFrequency)
-                      : field.placeholder
-                  }
-                  className="h-14 text-xl placeholder:text-[#9aa097]"
-                  value={quantitativeDisplay[field.id]}
-                  onChange={(event) => updateQuantitativeValue(field.id, event.currentTarget.value)}
-                />
-              </label>
-            ))}
+                );
+              }
+
+              if (question.type === "boolean") {
+                const answer = input[question.id];
+
+                return (
+                  <div key={question.id} className="space-y-3 rounded-2xl border border-border bg-surface p-4">
+                    <p className="text-base font-semibold">{question.prompt}</p>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        data-testid={`quiz-tier2-${question.id}-yes`}
+                        className={`rounded-xl px-4 py-3 text-sm font-semibold transition-all ${optionButtonClass(
+                          answer === true,
+                        )}`}
+                        onClick={() => answerTier2Boolean(question, true)}
+                      >
+                        Yes
+                      </button>
+                      <button
+                        type="button"
+                        data-testid={`quiz-tier2-${question.id}-no`}
+                        className={`rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+                          answer === false
+                            ? "bg-[#7a4a43] text-white"
+                            : "bg-[#f7f1ed] text-foreground ring-1 ring-border hover:bg-[#efe7e0]"
+                        }`}
+                        onClick={() => answerTier2Boolean(question, false)}
+                      >
+                        No
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <label key={question.id} className="grid gap-2 rounded-2xl border border-border bg-surface p-4">
+                  <span className="text-base font-semibold">{question.prompt}</span>
+                  <Input
+                    data-testid={`quiz-tier2-${question.id}`}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={question.placeholder}
+                    value={display.dependentChildrenCount}
+                    onChange={(event) => answerTier1Display("dependentChildrenCount", event.currentTarget.value)}
+                  />
+                </label>
+              );
+            })}
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="secondary" onClick={goBackQuantitative}>
+            <Button type="button" variant="secondary" onClick={goBackTier2}>
               <ChevronLeft className="mr-1 h-4 w-4" />
               Back
             </Button>
-            <Button data-testid="quant-next" type="button" onClick={goNextQuantitative} disabled={!canAdvanceQuantitative}>
+            <Button
+              data-testid="tier2-continue"
+              type="button"
+              onClick={() => setStage("account")}
+              disabled={!canContinueTier2}
+            >
               Next
               <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
@@ -791,56 +1011,101 @@ export function FirstHomeQuizFlow() {
       ) : null}
 
       {stage === "account" ? (
-        <Card className="animate-fade-up space-y-6 bg-white p-6 md:p-8">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
-              <Sparkles className="h-4 w-4" />
-              Send your summary
+        <Card className="animate-fade-up space-y-6 border-primary/30 bg-gradient-to-br from-[#f4faef] to-[#edf6f8] p-6 md:p-8">
+          {preview.dutyIntake.uncertaintyActive ? (
+            <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
+              Duty outputs will stay marked with * until the missing advanced details are filled or the Tier 3 edge case is resolved manually.{" "}
+              {preview.dutyIntake.reasons.join(" ")}
             </div>
-            <h2 className="text-3xl font-semibold tracking-tight">Your dashboard is ready.</h2>
+          ) : null}
+
+          <div className="space-y-4 rounded-2xl border border-primary/20 bg-white/80 p-4 md:p-5">
+            <h3 className="text-2xl font-semibold tracking-tight">What is the hardest part of saving for your first home?</h3>
             <p className="text-sm text-foreground-soft">
-              We want to hear about your story. Thousands of young Aussies are struggling to buy their first home and we would love to hear how we can help.
+              Tell us what you struggle with most so we can build the right tools
             </p>
+            <div className="grid gap-4">
+              <label className="grid gap-2 text-sm font-semibold">
+                <span>Name</span>
+                <Input value={supportName} onChange={(event) => setSupportName(event.currentTarget.value)} />
+              </label>
+            </div>
+            <div className="space-y-2 rounded-xl border border-border bg-white p-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground-soft">
+                Select your biggest challenge right now:
+              </p>
+              {SUPPORT_CHALLENGE_OPTIONS.map((option) => (
+                <label key={option.key} className="flex items-start gap-2">
+                  <input
+                    data-testid={`quiz-support-challenge-${option.key}`}
+                    type="radio"
+                    name="support-challenge"
+                    className="mt-0.5 h-4 w-4 rounded-full accent-primary"
+                    checked={supportChallenge === option.key}
+                    onChange={() => setSupportChallenge(option.key)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+              <div className="space-y-2 pt-2">
+                <p className="text-xs text-foreground-soft">How frustrating is this problem?</p>
+                <div className="flex items-center gap-1.5">
+                  {([1, 2, 3, 4, 5] as const).map((value) => (
+                    <button
+                      key={`quiz-support-frustration-${value}`}
+                      data-testid={`quiz-support-frustration-${value}`}
+                      type="button"
+                      className={`h-8 w-8 rounded-full border text-xs font-semibold transition ${
+                        supportFrustration === value
+                          ? "border-primary bg-primary text-white"
+                          : "border-border bg-surface text-foreground hover:bg-surface-muted"
+                      }`}
+                      onClick={() => setSupportFrustration(value)}
+                      aria-label={`Frustration level ${value}`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-foreground-soft">Minor -&gt; Extremely frustrating</p>
+              </div>
+              <label className="grid gap-1.5">
+                <span className="text-xs text-foreground-soft">
+                  Leave your email if you&apos;d like early access to tools that solve this
+                </span>
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={supportEmail}
+                  onChange={(event) => setSupportEmail(event.currentTarget.value)}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-xs text-foreground-soft">What have you already tried to solve this</span>
+                <textarea
+                  className="min-h-20 rounded-xl border border-border bg-[#f9f8f6] px-4 py-3 text-sm text-foreground outline-none ring-0 placeholder:text-[#9aa097] focus:border-primary focus:bg-white"
+                  placeholder="Spreadsheet, financial advisor, nothing yet, etc."
+                  value={supportTried}
+                  onChange={(event) => setSupportTried(event.currentTarget.value)}
+                />
+              </label>
+            </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="grid gap-2 text-sm font-semibold">
-              <span>Name</span>
-              <Input value={accountName} onChange={(event) => setAccountName(event.currentTarget.value)} />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold">
-              <span>Email</span>
-              <Input
-                type="email"
-                value={accountEmail}
-                onChange={(event) => setAccountEmail(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void createAccountAndContinue();
-                  }
-                }}
-              />
-            </label>
-          </div>
-
-          <label className="grid gap-2 text-sm font-semibold">
-            <span>Your story</span>
-            <textarea
-              className="min-h-28 rounded-xl border border-border bg-[#f9f8f6] px-4 py-3 text-sm text-foreground outline-none ring-0 placeholder:text-[#9aa097] focus:border-primary focus:bg-white"
-              placeholder="We want to hear about your story! Thousands of young Aussies are struggling to buy their first home and we would love to hear how we can help!"
-              value={accountStory}
-              onChange={(event) => setAccountStory(event.currentTarget.value)}
-            />
-          </label>
+          {supportError ? <p className="text-sm text-[#8a2f2f]">{supportError}</p> : null}
 
           <div className="flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="secondary"
               onClick={() => {
-                setStage("quantitative");
-                setQuantitativeBatchIndex(QUANTITATIVE_BATCHES.length - 1);
+                if (dutyIntake.needsTier2) {
+                  setStage("tier2");
+                  return;
+                }
+
+                setStage("tier1");
+                setTier1PageIndex(TIER1_PAGES.length - 1);
               }}
             >
               <ChevronLeft className="mr-1 h-4 w-4" />
@@ -850,9 +1115,9 @@ export function FirstHomeQuizFlow() {
               data-testid="create-free-account"
               type="button"
               onClick={() => void createAccountAndContinue()}
-              disabled={isSubmitting || !accountName.trim() || !accountEmail.trim() || !accountStory.trim()}
+              disabled={isSubmitting}
             >
-              {isSubmitting ? "Sending your summary..." : "Send my summary"}
+              {isSubmitting ? "Saving..." : "Continue to your dashboard"}
             </Button>
           </div>
         </Card>

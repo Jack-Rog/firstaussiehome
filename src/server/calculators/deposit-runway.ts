@@ -1,4 +1,8 @@
 import type { DepositScenarioInput, DepositScenarioOutput } from "@/src/lib/types";
+import {
+  calculateIndicativeNswFirstHomeDuty,
+  calculateIndicativeNswTransferDuty,
+} from "@/src/lib/stampDuty";
 
 const REVIEW_DATE = "2026-03-03";
 const DEFAULT_DEPOSIT_TARGETS = [5, 10, 20];
@@ -27,48 +31,6 @@ function amortizedMonthlyRepayment(principal: number, annualRate: number, termYe
   return (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -periods));
 }
 
-function calculateNswTransferDuty(value: number) {
-  if (value <= 0) {
-    return 0;
-  }
-
-  if (value <= 17000) {
-    return value * 0.0125;
-  }
-
-  if (value <= 36000) {
-    return 212 + (value - 17000) * 0.015;
-  }
-
-  if (value <= 97000) {
-    return 497 + (value - 36000) * 0.0175;
-  }
-
-  if (value <= 364000) {
-    return 1564 + (value - 97000) * 0.035;
-  }
-
-  if (value <= 1212000) {
-    return 10909 + (value - 364000) * 0.045;
-  }
-
-  return 49149 + (value - 1212000) * 0.055;
-}
-
-function calculateIndicativeFirstHomeDuty(value: number) {
-  const standardDuty = calculateNswTransferDuty(value);
-
-  if (value <= 800000) {
-    return 0;
-  }
-
-  if (value < 1000000) {
-    return (value - 800000) * 0.19706;
-  }
-
-  return standardDuty;
-}
-
 export function calculateDepositRunway(input: DepositScenarioInput): DepositScenarioOutput {
   const targetPropertyPrice = clampMoney(input.targetPropertyPrice);
   const currentSavings = clampMoney(input.currentSavings);
@@ -88,8 +50,8 @@ export function calculateDepositRunway(input: DepositScenarioInput): DepositScen
   const indicativeDebtServicing = indicativeHomeLoanRepayment + privateDebtServicing;
   const totalDebt = homeLoanAmount + privateDebt + hecsDebt;
   const existingDebt = privateDebt + hecsDebt;
-  const indicativeStampDuty = calculateNswTransferDuty(targetPropertyPrice);
-  const indicativeStampDutyAfterRelief = calculateIndicativeFirstHomeDuty(targetPropertyPrice);
+  const indicativeStampDuty = calculateIndicativeNswTransferDuty(targetPropertyPrice);
+  const indicativeStampDutyAfterRelief = calculateIndicativeNswFirstHomeDuty(targetPropertyPrice);
   const firstHomeGuaranteeMinimumDeposit = targetPropertyPrice * 0.05;
 
   const scenarioRows = targets.map((depositPercent) => {
