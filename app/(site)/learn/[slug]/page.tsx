@@ -30,11 +30,6 @@ export default async function LearnArticlePage({ params }: LearnArticlePageProps
         </p>
         <h1 className="text-4xl font-semibold tracking-tight">{article.frontmatter.title}</h1>
         <p className="text-lg text-foreground-soft">{article.frontmatter.summary}</p>
-        {article.frontmatter.category === "schemes" ? (
-          <p className="text-sm text-foreground-soft">
-            Placeholder blog draft: this page will be expanded into a full practical guide.
-          </p>
-        ) : null}
       </header>
       <div className="rounded-[1.25rem] border border-border bg-white p-8 shadow-soft">
         <div className="prose max-w-none">{article.content}</div>

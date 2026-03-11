@@ -27,7 +27,7 @@ import {
   type PropertyType,
 } from "@/src/lib/stampDuty";
 
-export const HOMEOWNER_PATHWAY_REVIEW_DATE = "2026-03-03";
+export const HOMEOWNER_PATHWAY_REVIEW_DATE = "2026-03-11";
 const HOME_LOAN_COMPARISON_RATE = 6.1;
 export const CURRENT_MARKET_OWNER_OCCUPIER_RATE = 5.42;
 const HOME_LOAN_TERM_YEARS = 30;
@@ -70,14 +70,44 @@ const HELP_TO_BUY_SUPPORTED_STATES = {
   act: true,
   nt: true,
 } as const;
-const BASE_SETTLEMENT_REFERENCE_PRICE = 808420.7;
-const BASE_SETUP_COSTS = {
-  professionalFees: 1100,
-  disbursements: 716.42,
-  stampingFee: 175,
-  registrationFees: 527.1,
-  pexaFee: 140.58,
-} as const;
+export const PURCHASE_COST_BANDS = [
+  {
+    label: "Up to $600k",
+    maxPrice: 600000,
+    professionalFees: 1600,
+    disbursements: 550,
+    stampingFee: 180,
+    registrationFees: 351.4,
+    pexaFee: 210.76,
+  },
+  {
+    label: "$600k to $900k",
+    maxPrice: 900000,
+    professionalFees: 1800,
+    disbursements: 650,
+    stampingFee: 180,
+    registrationFees: 351.4,
+    pexaFee: 210.76,
+  },
+  {
+    label: "$900k to $1.2m",
+    maxPrice: 1200000,
+    professionalFees: 2100,
+    disbursements: 700,
+    stampingFee: 200,
+    registrationFees: 351.4,
+    pexaFee: 210.76,
+  },
+  {
+    label: "Over $1.2m",
+    maxPrice: Number.POSITIVE_INFINITY,
+    professionalFees: 2500,
+    disbursements: 800,
+    stampingFee: 220,
+    registrationFees: 351.4,
+    pexaFee: 210.76,
+  },
+] as const;
 const HOME_STATE_LABELS = {
   nsw: "NSW",
   vic: "Victoria",
@@ -193,15 +223,18 @@ function calculatePayoffYears(
 }
 
 function calculateScaledSetupCosts(targetPropertyPrice: number) {
-  const scale = targetPropertyPrice <= 0 ? 1 : targetPropertyPrice / BASE_SETTLEMENT_REFERENCE_PRICE;
-  const professionalFees = Number((BASE_SETUP_COSTS.professionalFees * scale).toFixed(2));
-  const disbursements = Number((BASE_SETUP_COSTS.disbursements * scale).toFixed(2));
-  const stampingFee = Number((BASE_SETUP_COSTS.stampingFee * scale).toFixed(2));
-  const registrationFees = Number((BASE_SETUP_COSTS.registrationFees * scale).toFixed(2));
-  const pexaFee = Number((BASE_SETUP_COSTS.pexaFee * scale).toFixed(2));
+  const band =
+    PURCHASE_COST_BANDS.find((entry) => targetPropertyPrice > 0 && targetPropertyPrice <= entry.maxPrice) ??
+    PURCHASE_COST_BANDS[0];
+  const professionalFees = band.professionalFees;
+  const disbursements = band.disbursements;
+  const stampingFee = band.stampingFee;
+  const registrationFees = band.registrationFees;
+  const pexaFee = band.pexaFee;
   const total = professionalFees + disbursements + stampingFee + registrationFees + pexaFee;
 
   return {
+    label: band.label,
     professionalFees,
     disbursements,
     stampingFee,
@@ -752,7 +785,7 @@ export function buildHomeownerPathwayOutput(
 
   const upfrontCostPathway: HomeBuyingPathwayCard = {
     id: "upfront-costs",
-    label: "Other Upfront Costs",
+    label: "Additional Purchase Costs",
     headlineValue: formatCurrency(otherUpfrontCosts.mid),
     headlineStatus: "neutral",
     eligibilityState: {
@@ -777,7 +810,7 @@ export function buildHomeownerPathwayOutput(
       },
       {
         id: "upfront-stamping",
-        label: "Stamping fee",
+        label: "Verification and admin",
         value: formatCurrency(scaledSetupCosts.stampingFee),
       },
       {
@@ -792,11 +825,11 @@ export function buildHomeownerPathwayOutput(
       },
       {
         id: "upfront-total",
-        label: "Grouped setup costs",
+        label: "Additional purchase costs",
         value: formatCurrency(otherUpfrontCosts.mid),
       },
     ],
-    statusChips: ["Scaled from settlement-style costs"],
+    statusChips: [`NSW-guided estimate: ${scaledSetupCosts.label}`],
     glossaryTerms: [],
     officialLinks: ["MONEYSMART_HOME"],
   };
@@ -939,7 +972,7 @@ export function buildHomeownerPathwayOutput(
       "Mortgage comparisons use a 30-year principal-and-interest loan at 6.1%.",
       `Market-rate tiles use an educational owner-occupier estimate of ${CURRENT_MARKET_OWNER_OCCUPIER_RATE.toFixed(2)}% before any higher-LVR adjustment.`,
       "Private debt servicing uses a 5-year comparison term at 8.5%.",
-      "Grouped setup costs scale a recent settlement-style example in proportion to the target property price.",
+      "Additional purchase costs use NSW-guided 2025/26 registration fees, FY26 PEXA pricing, and current conveyancer cost bands by property price.",
       `Benchmark comparisons are broad and reviewed on ${BENCHMARK_REVIEW_DATE}.`,
     ],
     reviewDate: HOMEOWNER_PATHWAY_REVIEW_DATE,

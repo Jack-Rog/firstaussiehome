@@ -23,6 +23,7 @@ import {
   CURRENT_MARKET_OWNER_OCCUPIER_RATE,
   DEFAULT_HOMEOWNER_PATHWAY_INPUT,
   DEFAULT_HOMEOWNER_PATHWAY_SELECTIONS,
+  PURCHASE_COST_BANDS,
 } from "@/src/lib/analysis/homeowner-pathway-analysis";
 import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
@@ -93,15 +94,15 @@ const SCHEME_BLOG_SLUG_BY_ID: Record<string, string> = {
 
 const SETUP_COST_HINTS: Record<string, string> = {
   "upfront-professional":
-    "Legal support for contract review, settlement preparation, and final transfer process.",
+    "Typical conveyancer or solicitor fee for contract review, settlement preparation, and final transfer work.",
   "upfront-disbursements":
-    "Third-party search and lodgement costs often charged during conveyancing.",
+    "Typical searches, certificates, and third-party checks often charged during conveyancing.",
   "upfront-stamping":
-    "Document stamping/processing costs linked to settlement paperwork.",
+    "Typical verification, identity, and settlement admin charges that often sit outside the main legal fee.",
   "upfront-registration":
-    "Land registry transfer and mortgage registration charges.",
+    "NSW-guided transfer and mortgage registration charges.",
   "upfront-pexa":
-    "Electronic settlement platform fee for processing settlement.",
+    "NSW-guided PEXA transfer and mortgage workspace charges.",
 };
 const PROPERTY_PRICE_SLIDER_MIN = 0;
 const PROPERTY_PRICE_SLIDER_MAX = 2000000;
@@ -213,7 +214,7 @@ function schemePillClass(state: "active" | "available" | "inactive" | "watch" | 
   }
 
   if (state === "available") {
-    return "border-accent/30 bg-accent-soft text-[#345443]";
+    return "border-accent/30 bg-white text-[#345443]";
   }
 
   if (state === "watch") {
@@ -371,6 +372,7 @@ export function FirstHomeDashboard({
   );
   const showAdvancedTab = dutyIntake.needsTier2 || savedAdvancedFieldIds.length > 0;
   const dutyOutputsUncertain = dutyIntake.uncertaintyActive;
+  const activeResponseTab: ResponseTab = showAdvancedTab ? responseTab : "basic";
 
   useEffect(() => {
     setDisclosure({
@@ -410,12 +412,6 @@ export function FirstHomeDashboard({
       window.clearTimeout(timer);
     };
   }, [accountName, expenseFrequency, incomeFrequency, input, selections]);
-
-  useEffect(() => {
-    if (!showAdvancedTab && responseTab === "advanced") {
-      setResponseTab("basic");
-    }
-  }, [responseTab, showAdvancedTab]);
 
   const depositPathway = withSchemes.pathways.find((pathway) => pathway.id === "deposit");
   const upfrontCostsPathway = withSchemes.pathways.find((pathway) => pathway.id === "upfront-costs");
@@ -470,10 +466,16 @@ export function FirstHomeDashboard({
       ...metric,
       label:
         metric.id === "upfront-professional"
-          ? "Solicitor/Conveyancer fees"
+          ? "Conveyancer / solicitor"
+          : metric.id === "upfront-stamping"
+            ? "Verification and admin"
           : metric.label,
     }),
   );
+  const purchaseCostBandSummaries = PURCHASE_COST_BANDS.map((band) => ({
+    label: band.label,
+    total: band.professionalFees + band.disbursements + band.stampingFee + band.registrationFees + band.pexaFee,
+  }));
 
   function toggleSection(section: DashboardSection) {
     setOpenSections((current) => ({
@@ -572,7 +574,7 @@ export function FirstHomeDashboard({
         })),
     },
     {
-      label: "Not foreign person",
+      label: "Domestic persons",
       active: !(input.foreignBuyer ?? false),
       icon: UserRound,
       onToggle: () =>
@@ -853,7 +855,7 @@ export function FirstHomeDashboard({
       <div className="order-2">
       <SectionCard
         title="Your responses"
-        subtitle="Basic answers stay visible to everyone. Advanced only appears when the duty path needs Tier 2 detail."
+        subtitle="Outputs are estimates only. Please refer to official links to verify your personal situation."
         isOpen={openSections.scenario}
         onToggle={() => toggleSection("scenario")}
       >
@@ -862,7 +864,7 @@ export function FirstHomeDashboard({
             <button
               type="button"
               className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                responseTab === "basic" ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                activeResponseTab === "basic" ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
               }`}
               onClick={() => setResponseTab("basic")}
             >
@@ -872,7 +874,7 @@ export function FirstHomeDashboard({
               <button
                 type="button"
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                  responseTab === "advanced" ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
+                  activeResponseTab === "advanced" ? "bg-primary text-white" : "bg-surface ring-1 ring-border"
                 }`}
                 onClick={() => setResponseTab("advanced")}
               >
@@ -881,7 +883,7 @@ export function FirstHomeDashboard({
             ) : null}
           </div>
 
-          {responseTab === "basic" ? (
+          {activeResponseTab === "basic" ? (
             <div className="space-y-4">
               {showAdvancedTab && dutyIntake.needsTier2 ? (
                 <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
@@ -1047,13 +1049,13 @@ export function FirstHomeDashboard({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
-                {dutyIntake.hasTier3EdgeCase
-                  ? "This path still uses broad duty assumptions even after Advanced is complete."
-                  : dutyIntake.tier2Complete
-                    ? "Advanced duty details are complete for the supported Tier 2 path."
+              {dutyIntake.hasTier3EdgeCase || !dutyIntake.tier2Complete ? (
+                <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
+                  {dutyIntake.hasTier3EdgeCase
+                    ? "This path still uses broad duty assumptions even after Advanced is complete."
                     : "Complete the Advanced answers below to tighten the duty estimate."}
-              </div>
+                </div>
+              ) : null}
 
               {advancedFieldIds.length === 0 ? (
                 <p className="text-sm text-foreground-soft">No Advanced duty answers are needed for the current scenario.</p>
@@ -1338,7 +1340,7 @@ export function FirstHomeDashboard({
                 onClick={() => setSetupCostsOpen((current) => !current)}
               >
                 <span className="inline-flex min-w-[1.1rem] justify-center font-semibold text-primary-strong">+</span>
-                <span>Grouped setup costs</span>
+                <span>Additional Purchase Costs</span>
                 {setupCostsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
               <div className="px-4 py-3 font-semibold text-foreground">
@@ -1364,12 +1366,15 @@ export function FirstHomeDashboard({
                       <span className="font-semibold">{metric.value}</span>
                     </div>
                   ))}
+                  <div className="grid gap-2 pt-2 text-xs text-foreground-soft md:grid-cols-2">
+                    {purchaseCostBandSummaries.map((band) => (
+                      <div key={band.label} className="rounded-lg bg-surface px-3 py-2">
+                        <span className="font-semibold text-foreground">{band.label}</span>: about {formatCurrency(band.total)}
+                      </div>
+                    ))}
+                  </div>
                   <p className="pt-2 text-xs text-foreground-soft">
-                    Disclaimer: these were my own settlement-style costs based on an $850k property. Email me to get in touch:{" "}
-                    <a href="mailto:jackson.henry.rogers@gmail.com" className="font-semibold text-primary underline underline-offset-2">
-                      jackson.henry.rogers@gmail.com
-                    </a>
-                    .
+                    NSW-guided estimate using 2025/26 NSW Land Registry registration fees, FY26 PEXA pricing, and current conveyancer market ranges by price band. This does not include building and pest inspections, strata reports, lender fees, removals, or urgent contract review surcharges.
                   </p>
                 </div>
               </div>
@@ -1392,7 +1397,7 @@ export function FirstHomeDashboard({
           </div>
 
           <p className="rounded-xl border border-border bg-white px-4 py-3 text-sm text-foreground-soft">
-            Funds required from you = <span className="font-semibold">Home price - Bank funding + Stamp duty + Grouped setup costs</span>.
+            Funds required from you = <span className="font-semibold">Home price - Bank funding + Stamp duty + Additional Purchase Costs</span>.
           </p>
 
           {dutyOutputsUncertain ? (

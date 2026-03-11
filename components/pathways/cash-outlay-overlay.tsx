@@ -21,7 +21,7 @@ export function CashOutlayOverlay({
     { label: "Deposit", value: model.depositAmount },
     { label: "Mortgage", value: model.mortgageAmount },
     { label: "Stamp duty", value: model.stampDuty },
-    { label: "Other costs", value: model.otherUpfrontCosts },
+    { label: "Additional purchase costs", value: model.otherUpfrontCosts },
   ];
 
   return (

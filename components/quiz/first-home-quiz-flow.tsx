@@ -203,7 +203,7 @@ const TIER1_PAGES: Array<{
       {
         type: "boolean",
         id: "foreignBuyer",
-        prompt: "Are all buyers not foreign persons for duty purposes?",
+        prompt: "Are all buyers considered domestic persons for duty purposes?",
         applyAnswer: (current, answer) => ({
           ...current,
           foreignBuyer: !answer,
@@ -509,6 +509,8 @@ export function FirstHomeQuizFlow() {
   const preview = useMemo(() => buildHomeownerPathwayOutput(input, previewSelections), [input, previewSelections]);
   const canContinueTier1 = tier1Page.questions.every((question) => isTier1QuestionAnswered(question, tier1Answers, display));
   const canContinueTier2 = tier2Questions.every((question) => isTier2QuestionAnswered(question, input, display));
+  const canUnlockDashboard =
+    supportName.trim().length > 0 && supportChallenge !== null && supportFrustration !== null;
   const stageLabels = dutyIntake.needsTier2 ? ["Tier 1", "Tier 2", "Final details"] : ["Tier 1", "Final details"];
   const currentStagePosition =
     stage === "tier1" ? 0 : stage === "tier2" && dutyIntake.needsTier2 ? 1 : stageLabels.length - 1;
@@ -705,6 +707,21 @@ export function FirstHomeQuizFlow() {
   }
 
   async function createAccountAndContinue() {
+    if (supportName.trim().length === 0) {
+      setSupportError("Enter your name before continuing.");
+      return;
+    }
+
+    if (supportChallenge === null) {
+      setSupportError("Select your biggest challenge before continuing.");
+      return;
+    }
+
+    if (supportFrustration === null) {
+      setSupportError("Select how frustrating that challenge is before continuing.");
+      return;
+    }
+
     setIsSubmitting(true);
     setSupportError(null);
 
@@ -791,7 +808,7 @@ export function FirstHomeQuizFlow() {
                 ? `Page ${tier1PageIndex + 1} of ${TIER1_PAGES.length}`
                 : stage === "tier2"
                   ? "Only shown when duty needs more detail"
-                  : "One last step before the dashboard"}
+                  : "One last step before your results and dashboard"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -1020,10 +1037,15 @@ export function FirstHomeQuizFlow() {
           ) : null}
 
           <div className="space-y-4 rounded-2xl border border-primary/20 bg-white/80 p-4 md:p-5">
-            <h3 className="text-2xl font-semibold tracking-tight">What is the hardest part of saving for your first home?</h3>
-            <p className="text-sm text-foreground-soft">
-              Tell us what you struggle with most so we can build the right tools
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-strong">
+                Before you get your results...
+              </p>
+              <h3 className="text-2xl font-semibold tracking-tight">What is the hardest part of saving for your first home?</h3>
+              <p className="text-sm text-foreground-soft">
+                Enter your name and tell us what feels hardest so the dashboard can open with the right context.
+              </p>
+            </div>
             <div className="grid gap-4">
               <label className="grid gap-2 text-sm font-semibold">
                 <span>Name</span>
@@ -1090,6 +1112,9 @@ export function FirstHomeQuizFlow() {
                 />
               </label>
             </div>
+            <p className="text-xs text-foreground-soft">
+              Name, biggest challenge, and frustration level are required before the dashboard unlocks.
+            </p>
           </div>
 
           {supportError ? <p className="text-sm text-[#8a2f2f]">{supportError}</p> : null}
@@ -1115,7 +1140,7 @@ export function FirstHomeQuizFlow() {
               data-testid="create-free-account"
               type="button"
               onClick={() => void createAccountAndContinue()}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canUnlockDashboard}
             >
               {isSubmitting ? "Saving..." : "Continue to your dashboard"}
             </Button>

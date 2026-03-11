@@ -100,9 +100,9 @@ export const REFERENCE_LINKS: Record<ReferenceKey, ReferenceLink> = {
   },
   TODO_HELP_TO_BUY: {
     key: "TODO_HELP_TO_BUY",
-    label: "Help to Buy official detail (TODO)",
-    href: "https://www.housingaustralia.gov.au/",
-    note: "Placeholder until the exact live Help to Buy landing page is confirmed.",
+    label: "Housing Australia Help to Buy updates",
+    href: "https://www.housingaustralia.gov.au/media/applications-now-open-australian-government-help-buy-scheme",
+    note: "Official Housing Australia Help to Buy scheme update and launch detail.",
   },
 };
 
