@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,7 @@ type ResearchIntakeFormProps = {
 };
 
 export function ResearchIntakeForm({ surface, title, intro, context }: ResearchIntakeFormProps) {
+  const problemFieldRef = useRef<HTMLTextAreaElement | null>(null);
   const [problemText, setProblemText] = useState("");
   const [attemptedSolutions, setAttemptedSolutions] = useState("");
   const [category, setCategory] = useState<ResearchCategory | "">("");
@@ -235,8 +236,44 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
     });
   }
 
+  function focusSurvey() {
+    problemFieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    problemFieldRef.current?.focus();
+  }
+
   if (isSuppressed) {
-    return null;
+    return (
+      <Card
+        data-testid={`research-intake-${surface}-suppressed`}
+        className="animate-fade-up border-primary/20 bg-[linear-gradient(135deg,#f6faf2,#f7f3eb)] p-5"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="max-w-2xl space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Quick research survey</p>
+            <CardTitle className="text-lg">You already shared feedback recently.</CardTitle>
+            <CardText>
+              We hide the full form for 30 days after a dashboard submission so it does not vanish without explanation.
+              If you want to add more detail, reopen it here.
+            </CardText>
+          </div>
+          <Button
+            type="button"
+            onClick={() => {
+              setIsSuppressed(false);
+              setHasTrackedStart(true);
+              void trackResearchEvent({
+                surface,
+                eventName: "research_started",
+                properties: { reopened: true },
+              });
+              window.setTimeout(focusSurvey, 0);
+            }}
+          >
+            Open survey again
+          </Button>
+        </div>
+      </Card>
+    );
   }
 
   if (surface === "dashboard" && isCollapsed) {
@@ -272,6 +309,23 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
 
   return (
     <Card data-testid={`research-intake-${surface}`} className="animate-fade-up border-primary/20 bg-white/94">
+      {surface === "dashboard" ? (
+        <div className="mb-5 rounded-[1.1rem] border border-primary/20 bg-[linear-gradient(135deg,#f3f9ef,#f7f1e8)] p-4 shadow-[0_8px_20px_rgba(33,47,37,0.06)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Quick research survey</p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="max-w-2xl space-y-1">
+              <p className="text-lg font-semibold tracking-tight">Tell us what is still blocking you.</p>
+              <p className="text-sm text-foreground-soft">
+                Fill in the short survey below. Early research participants may receive free credits in future rollouts.
+              </p>
+            </div>
+            <Button type="button" onClick={focusSurvey}>
+              Fill in the survey
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
           {surface === "dashboard" ? "Help shape what comes next" : "Tools + Support Research"}
@@ -284,6 +338,7 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
         <label className="grid gap-2">
           <span className="text-sm font-semibold">Tell us the last real moment you got stuck</span>
           <textarea
+            ref={problemFieldRef}
             data-testid={`research-${surface}-problem`}
             className="min-h-28 rounded-xl border border-border bg-[#f9f8f6] px-4 py-3 text-sm text-foreground shadow-[0_2px_10px_rgba(30,41,34,0.06)] outline-none placeholder:text-[#9aa097] focus:border-primary focus:bg-white"
             placeholder="Example: I spent hours trying to work out whether I could buy sooner with a scheme, but I still was not sure what applied to me."

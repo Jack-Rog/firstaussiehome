@@ -101,3 +101,19 @@ test("dashboard research can be skipped without blocking the dashboard", async (
   await expect(page.getByRole("button", { name: "Share feedback later" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your first-home dashboard" })).toBeVisible();
 });
+
+test("dashboard research stays discoverable after recent submission suppression", async ({ page }) => {
+  await page.addInitScript((storageKey: string) => {
+    window.localStorage.setItem(storageKey, new Date().toISOString());
+  }, "aussiesfirsthome:dashboard-research-submitted-at");
+
+  await page.goto("/first-home-dashboard");
+
+  await expect(page.getByText("You already shared feedback recently.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open survey again" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Open survey again" }).click();
+
+  await expect(page.getByTestId("research-intake-dashboard")).toBeVisible();
+  await expect(page.getByText("What still feels hardest about buying your first home?")).toBeVisible();
+});

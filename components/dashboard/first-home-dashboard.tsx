@@ -617,19 +617,21 @@ export function FirstHomeDashboard({
       <div className="rounded-[1.35rem] border border-border bg-white/90 p-2 md:p-2.5 shadow-[0_10px_26px_rgba(33,47,37,0.1)]">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-strong md:text-xs">
-            Cost of your First Home
-          </p>
-          {bannerCollapsed ? (
-            <p
-              data-testid="collapsed-banner-cash-outlay"
-              className={`truncate text-sm font-semibold md:text-base ${
-                dutyOutputsUncertain ? "text-foreground-soft" : "text-foreground"
-              }`}
-            >
-              {`Cost of your First Home ${currentCashDisplay}`}
+          <div className="flex min-w-0 items-baseline gap-2">
+            <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-strong md:text-xs">
+              Cost of your First Home
             </p>
-          ) : null}
+            {bannerCollapsed ? (
+              <p
+                data-testid="collapsed-banner-cash-outlay"
+                className={`min-w-0 truncate text-sm font-semibold tracking-normal md:text-base ${
+                  dutyOutputsUncertain ? "text-foreground-soft" : "text-foreground"
+                }`}
+              >
+                {currentCashDisplay}
+              </p>
+            ) : null}
+          </div>
         </div>
         <button
           type="button"
