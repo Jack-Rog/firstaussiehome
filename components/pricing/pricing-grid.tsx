@@ -10,13 +10,11 @@ const TIER_FEATURES = {
     "Guided learning",
   ],
   eoi: [
-    "CSV import",
-    "Deeper scenario modelling",
-    "Readiness reporting",
-    "State scheme detail checks",
-    "Licensed advice (coming soon)",
-    "Expression-of-interest only",
-    "Future human sign-off workflow",
+    "Problem-based research intake",
+    "Manual interview follow-up",
+    "Signals for future tools",
+    "Signals for possible human support",
+    "No feature checklist guesswork",
   ],
 };
 
@@ -46,11 +44,11 @@ export function PricingGrid({ paymentsDemo }: { paymentsDemo: boolean }) {
           <Zap className="h-3.5 w-3.5" />
           Optional next step
         </div>
-        <CardTitle className="text-white">Pro + Advice EOI</CardTitle>
+        <CardTitle className="text-white">Tools + Support Research</CardTitle>
         <CardText className="text-white/85">
-          One combined expression-of-interest lane for advanced tools and future licensed advice.
+          Tell us what feels hard, what you have already tried, and whether a short follow-up chat would help us learn faster.
         </CardText>
-        <p className="text-4xl font-semibold">EOI</p>
+        <p className="text-4xl font-semibold">Research</p>
         <ul className="space-y-2 text-sm text-white/85">
           {TIER_FEATURES.eoi.map((feature) => (
             <li key={feature} className="flex items-start gap-2">
@@ -60,12 +58,12 @@ export function PricingGrid({ paymentsDemo }: { paymentsDemo: boolean }) {
           ))}
         </ul>
         <Link href="/eoi/tools" className="w-full rounded-xl bg-white px-5 py-3 text-center text-sm font-semibold text-primary transition hover:bg-white/90">
-          Join combined EOI
+          Open tools + support research
         </Link>
         {paymentsDemo ? (
-          <p className="text-xs text-white/80">Payments are disabled in dev. Pro options are EOI only.</p>
+          <p className="text-xs text-white/80">Payments are disabled in dev. This lane is for research, not checkout.</p>
         ) : (
-          <p className="text-xs text-white/80">No paid integration currently. This combined lane is expression-of-interest only.</p>
+          <p className="text-xs text-white/80">No paid integration currently. This lane exists to identify what is worth building next.</p>
         )}
       </Card>
     </div>

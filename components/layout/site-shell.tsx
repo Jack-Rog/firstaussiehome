@@ -29,7 +29,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
                 Dashboard
               </Link>
               <Link href="/eoi/tools" className="hover:text-primary">
-                Pro + Advice EOI
+                Tools + Support Research
               </Link>
             </div>
           </div>
@@ -41,7 +41,7 @@ export function SiteShell({ children }: { children: ReactNode }) {
                 Learn
               </Link>
               <Link href="/eoi/tools" className="hover:text-primary">
-                Pro + Advice EOI
+                Tools + Support Research
               </Link>
             </div>
           </div>

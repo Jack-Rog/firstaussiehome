@@ -6,6 +6,10 @@ import type {
   ProgressEntryRecord,
   ProgressKind,
   QuizSubmissionRecord,
+  ResearchEventName,
+  ResearchEventRecord,
+  ResearchSubmissionRecord,
+  ResearchSubmissionSurface,
   ReadinessReportModel,
   SavedScenarioRecord,
   SubscriptionRecord,
@@ -118,6 +122,52 @@ export class PrismaRepository {
     };
   }
 
+  private mapResearchSubmission(entry: {
+    id: string;
+    userId: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: string;
+    promptVersion: string;
+    response: Prisma.JsonValue;
+    result: Prisma.JsonValue;
+    createdAt: Date;
+  }): ResearchSubmissionRecord {
+    return {
+      id: entry.id,
+      userId: entry.userId,
+      anonymousId: entry.anonymousId,
+      sessionId: entry.sessionId,
+      surface: entry.surface as ResearchSubmissionSurface,
+      promptVersion: entry.promptVersion,
+      response: entry.response as Record<string, unknown>,
+      result: entry.result as Record<string, unknown>,
+      createdAt: entry.createdAt.toISOString(),
+    };
+  }
+
+  private mapResearchEvent(entry: {
+    id: string;
+    userId: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: string;
+    eventName: string;
+    properties: Prisma.JsonValue;
+    createdAt: Date;
+  }): ResearchEventRecord {
+    return {
+      id: entry.id,
+      userId: entry.userId,
+      anonymousId: entry.anonymousId,
+      sessionId: entry.sessionId,
+      surface: entry.surface as ResearchEventRecord["surface"],
+      eventName: entry.eventName as ResearchEventName,
+      properties: (entry.properties ?? {}) as Record<string, unknown>,
+      createdAt: entry.createdAt.toISOString(),
+    };
+  }
+
   async listProgress(userId: string) {
     const entries = await this.prisma.progressEntry.findMany({
       where: { userId },
@@ -200,6 +250,50 @@ export class PrismaRepository {
       quizType: entry.quizType as QuizSubmissionRecord["quizType"],
       createdAt: entry.createdAt.toISOString(),
     };
+  }
+
+  async saveResearchSubmission(input: {
+    userId?: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: ResearchSubmissionSurface;
+    promptVersion: string;
+    response: Record<string, unknown>;
+    result: Record<string, unknown>;
+  }) {
+    const entry = await this.prisma.researchSubmission.create({
+      data: {
+        userId: input.userId ?? null,
+        anonymousId: input.anonymousId,
+        sessionId: input.sessionId,
+        surface: input.surface,
+        promptVersion: input.promptVersion,
+        response: this.toJson(input.response),
+        result: this.toJson(input.result),
+      },
+    });
+    return this.mapResearchSubmission(entry);
+  }
+
+  async saveResearchEvent(input: {
+    userId?: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: ResearchEventRecord["surface"];
+    eventName: ResearchEventName;
+    properties?: Record<string, unknown>;
+  }) {
+    const entry = await this.prisma.researchEvent.create({
+      data: {
+        userId: input.userId ?? null,
+        anonymousId: input.anonymousId,
+        sessionId: input.sessionId,
+        surface: input.surface,
+        eventName: input.eventName,
+        properties: this.toJson(input.properties ?? {}),
+      },
+    });
+    return this.mapResearchEvent(entry);
   }
 
   async listSavedScenarios(userId: string) {

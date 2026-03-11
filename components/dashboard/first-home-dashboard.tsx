@@ -13,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useDisclosure } from "@/components/compliance/disclosure-context";
+import { ResearchIntakeForm } from "@/components/research/research-intake-form";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +30,8 @@ import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
   type HomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
+import { deriveResearchContextFromHomeownerInput } from "@/src/lib/research";
+import { trackResearchEvent } from "@/src/lib/research-client";
 import { REFERENCE_LINKS } from "@/src/lib/references";
 import type { HomeownerPathwayInput, HomeownerPathwaySelections } from "@/src/lib/types";
 import {
@@ -154,7 +157,6 @@ function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>)
       selections: baseSelections,
       incomeFrequency: "annually" as Frequency,
       expenseFrequency: "monthly" as Frequency,
-      accountName: "there",
     };
   }
 
@@ -165,7 +167,6 @@ function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>)
       selections: baseSelections,
       incomeFrequency: "annually" as Frequency,
       expenseFrequency: "monthly" as Frequency,
-      accountName: "there",
     };
   }
 
@@ -188,7 +189,6 @@ function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>)
       },
       incomeFrequency: saved.incomeFrequency,
       expenseFrequency: saved.expenseFrequency,
-      accountName: saved.account.name || "there",
     };
   } catch {
     window.localStorage.removeItem(HOMEOWNER_DASHBOARD_STORAGE_KEY);
@@ -197,7 +197,6 @@ function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>)
       selections: baseSelections,
       incomeFrequency: "annually" as Frequency,
       expenseFrequency: "monthly" as Frequency,
-      accountName: "there",
     };
   }
 }
@@ -330,7 +329,6 @@ export function FirstHomeDashboard({
   const [selections, setSelections] = useState<HomeownerPathwaySelections>(initialState.selections);
   const [incomeFrequency] = useState<Frequency>(initialState.incomeFrequency);
   const [expenseFrequency] = useState<Frequency>(initialState.expenseFrequency);
-  const [accountName] = useState(initialState.accountName);
   const [display, setDisplay] = useState<DisplayDraft>(
     toDisplayDraft(initialState.input),
   );
@@ -383,6 +381,13 @@ export function FirstHomeDashboard({
   }, [setDisclosure, withSchemes]);
 
   useEffect(() => {
+    void trackResearchEvent({
+      surface: "dashboard",
+      eventName: "dashboard_viewed",
+    });
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -393,11 +398,6 @@ export function FirstHomeDashboard({
         ...selections,
         includeGuaranteeComparison: true,
         includeFhssConcept: true,
-      },
-      account: {
-        name: accountName,
-        email: "saved@aussiesfirsthome.local",
-        story: "",
       },
       incomeFrequency,
       expenseFrequency,
@@ -411,7 +411,7 @@ export function FirstHomeDashboard({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [accountName, expenseFrequency, incomeFrequency, input, selections]);
+  }, [expenseFrequency, incomeFrequency, input, selections]);
 
   const depositPathway = withSchemes.pathways.find((pathway) => pathway.id === "deposit");
   const upfrontCostsPathway = withSchemes.pathways.find((pathway) => pathway.id === "upfront-costs");
@@ -593,7 +593,7 @@ export function FirstHomeDashboard({
   return (
     <div className="flex flex-col gap-6 pb-20 xl:pb-0">
       <section className="animate-fade-up rounded-[1.4rem] border border-border bg-[radial-gradient(circle_at_90%_16%,rgba(122,156,137,0.22),transparent_38%),linear-gradient(180deg,#ffffff,#f3f6f1)] p-6 shadow-[0_16px_38px_rgba(33,47,37,0.11)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Welcome back, {accountName}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Your results are ready</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">Your first-home dashboard</h1>
         <p className="mt-2 text-sm text-foreground-soft">Each change below updates the out-of-pocket cash straight away.</p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -605,6 +605,13 @@ export function FirstHomeDashboard({
           </span>
         </div>
       </section>
+
+      <ResearchIntakeForm
+        surface="dashboard"
+        title="What still feels hardest about buying your first home?"
+        intro="Tell us about a real situation from the last few weeks. We use this to decide what to build next."
+        context={deriveResearchContextFromHomeownerInput(input)}
+      />
 
       <div className="sticky top-[5.1rem] z-30 space-y-2 md:top-[5.4rem] md:space-y-0">
       <div className="rounded-[1.35rem] border border-border bg-white/90 p-2 md:p-2.5 shadow-[0_10px_26px_rgba(33,47,37,0.1)]">

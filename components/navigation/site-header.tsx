@@ -35,7 +35,7 @@ export function SiteHeader() {
             href={"/eoi/tools" as never}
             className="rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-primary-soft hover:text-primary-strong"
           >
-            Pro + Advice EOI
+            Tools + Support Research
           </Link>
         </nav>
 
@@ -75,7 +75,7 @@ export function SiteHeader() {
               className="rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-primary-soft hover:text-primary-strong"
               onClick={() => setMobileOpen(false)}
             >
-              Pro + Advice EOI
+              Tools + Support Research
             </Link>
           </nav>
         </div>

@@ -239,9 +239,9 @@ export function HomeownerGatewayHero() {
           <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <Sparkles className="h-5 w-5" />
           </div>
-          <p className="text-lg font-semibold">Join EOI for pro pathways</p>
+          <p className="text-lg font-semibold">Shape future tools and support</p>
           <p className="mt-2 text-sm text-foreground-soft">
-            Pro plans and licensed advice are currently expression-of-interest only.
+            Tell us what still feels hard so we can decide what tools or support are actually worth building next.
           </p>
         </div>
       </section>

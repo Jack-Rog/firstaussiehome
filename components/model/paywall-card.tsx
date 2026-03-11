@@ -15,7 +15,7 @@ export function PaywallCard({ paymentsDemo }: { paymentsDemo: boolean }) {
         href="/eoi/tools"
         className="inline-flex w-fit items-center rounded-full bg-primary px-5 py-3 font-semibold text-white"
       >
-        Join Pro + Advice EOI
+        Open Tools + Support Research
       </Link>
     </Card>
   );

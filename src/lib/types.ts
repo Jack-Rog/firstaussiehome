@@ -561,9 +561,84 @@ export type BookmarkRecord = {
 export type QuizSubmissionRecord = {
   id: string;
   userId: string;
-  quizType: "onboarding" | "fundamentals" | "schemes" | "dashboard-support";
+  quizType: "onboarding" | "fundamentals" | "schemes";
   answers: Record<string, unknown>;
   result: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type ResearchSurface = "quiz" | "dashboard" | "eoi";
+
+export type ResearchSubmissionSurface = Exclude<ResearchSurface, "quiz">;
+
+export type ResearchCategory =
+  | "options-and-schemes"
+  | "affordability"
+  | "deposit-and-cash"
+  | "save-vs-invest-vs-debt"
+  | "making-a-plan"
+  | "something-else";
+
+export type ResearchTimeStuck = "lt-1-month" | "1-3-months" | "3-6-months" | "gt-6-months";
+
+export type ResearchBuyTimeline = "lt-12-months" | "1-2-years" | "2-5-years" | "not-sure";
+
+export type ResearchCareerStage =
+  | "still-studying"
+  | "0-2-years-working"
+  | "3-5-years-working"
+  | "5-plus-years-working"
+  | "other";
+
+export type ResearchIncomeBand = "lt-80k" | "80k-120k" | "120k-160k" | "gt-160k" | "unknown";
+
+export type ResearchSavingsBand = "lt-20k" | "20k-50k" | "50k-100k" | "gt-100k" | "unknown";
+
+export type ResearchPropertyPriceBand = "lt-600k" | "600k-800k" | "800k-1m" | "gt-1m" | "unknown";
+
+export type ResearchBuyingMode = "solo" | "joint" | "unknown";
+
+export type ResearchState = NonNullable<HomeownerPathwayInput["homeState"]> | "unknown";
+
+export type ResearchDetailBand = "thin" | "solid" | "rich";
+
+export type ResearchEventName =
+  | "quiz_completed"
+  | "dashboard_viewed"
+  | "research_module_viewed"
+  | "research_started"
+  | "research_skipped"
+  | "research_submitted"
+  | "eoi_viewed";
+
+export type ResearchContext = {
+  state?: ResearchState | null;
+  incomeBand?: ResearchIncomeBand | null;
+  savingsBand?: ResearchSavingsBand | null;
+  buyingMode?: ResearchBuyingMode | null;
+  propertyPriceBand?: ResearchPropertyPriceBand | null;
+};
+
+export type ResearchSubmissionRecord = {
+  id: string;
+  userId: string | null;
+  anonymousId: string;
+  sessionId: string;
+  surface: ResearchSubmissionSurface;
+  promptVersion: string;
+  response: Record<string, unknown>;
+  result: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type ResearchEventRecord = {
+  id: string;
+  userId: string | null;
+  anonymousId: string;
+  sessionId: string;
+  surface: ResearchSurface;
+  eventName: ResearchEventName;
+  properties: Record<string, unknown>;
   createdAt: string;
 };
 

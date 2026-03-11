@@ -17,6 +17,7 @@ import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
   type HomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
+import { trackResearchEvent } from "@/src/lib/research-client";
 import type {
   DutyTier2FieldId,
   HomeownerPathwayInput,
@@ -24,7 +25,7 @@ import type {
 } from "@/src/lib/types";
 import { formatCurrencyInput, parseMoneyInput } from "@/src/lib/utils";
 
-type Stage = "tier1" | "tier2" | "account";
+type Stage = "tier1" | "tier2";
 
 type Tier1QuestionId =
   | "homeState"
@@ -53,6 +54,14 @@ type DisplayDraft = {
   actHouseholdIncome: string;
   currentSavings: string;
   dependentChildrenCount: string;
+};
+
+type QuizPersistedState = {
+  stage: Stage;
+  tier1PageIndex: number;
+  input: HomeownerPathwayInput;
+  tier1Answers: Tier1AnswerMap;
+  display: DisplayDraft;
 };
 
 type Tier1Question =
@@ -371,19 +380,6 @@ const TIER2_QUESTION_BY_FIELD: Record<DutyTier2FieldId, Tier2Question> = {
   },
 };
 
-const SUPPORT_CHALLENGE_OPTIONS = [
-  { key: "deposit-need", label: "Figuring out how much deposit I actually need" },
-  { key: "saving-consistently", label: "Saving consistently for the deposit" },
-  { key: "invest-or-save", label: "Deciding whether to invest or save" },
-  { key: "debt-vs-saving", label: "Paying off debt vs saving" },
-  { key: "understanding-schemes", label: "Understanding government schemes" },
-  { key: "affordable-price-range", label: "Knowing what price range I can afford" },
-  { key: "long-term-plan", label: "Building a long-term financial plan" },
-  { key: "something-else", label: "Something else" },
-] as const;
-
-type SupportChallengeKey = (typeof SUPPORT_CHALLENGE_OPTIONS)[number]["key"];
-
 function buildDefaultSelections(input: HomeownerPathwayInput): HomeownerPathwaySelections {
   const preview = buildHomeownerPathwayOutput(input, {
     ...DEFAULT_HOMEOWNER_PATHWAY_SELECTIONS,
@@ -415,6 +411,54 @@ function getInitialDisplay(): DisplayDraft {
     currentSavings: "",
     dependentChildrenCount: "",
   };
+}
+
+function getInitialQuizState(): QuizPersistedState {
+  const baseInput: HomeownerPathwayInput = {
+    ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
+    livingInNsw: true,
+  };
+  const fallback: QuizPersistedState = {
+    stage: "tier1",
+    tier1PageIndex: 0,
+    input: baseInput,
+    tier1Answers: {},
+    display: getInitialDisplay(),
+  };
+
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+
+  const raw = window.localStorage.getItem(QUIZ_STORAGE_KEY);
+  if (!raw) {
+    return fallback;
+  }
+
+  try {
+    const saved = JSON.parse(raw) as Partial<QuizPersistedState>;
+    const savedInput = saved.input ?? baseInput;
+    const savedHomeState = savedInput.homeState ?? (savedInput.livingInNsw === false ? "vic" : "nsw");
+
+    return {
+      stage: saved.stage ?? "tier1",
+      tier1PageIndex: typeof saved.tier1PageIndex === "number" ? saved.tier1PageIndex : 0,
+      input: {
+        ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
+        ...savedInput,
+        homeState: savedHomeState,
+        livingInNsw: savedHomeState === "nsw",
+      },
+      tier1Answers: saved.tier1Answers ?? {},
+      display: {
+        ...getInitialDisplay(),
+        ...saved.display,
+      },
+    };
+  } catch {
+    window.localStorage.removeItem(QUIZ_STORAGE_KEY);
+    return fallback;
+  }
 }
 
 function formatTier1Answer(questionId: Tier1Question["id"], value: string) {
@@ -483,21 +527,13 @@ function optionButtonClass(active: boolean) {
 export function FirstHomeQuizFlow() {
   const router = useRouter();
   const { setDisclosure } = useDisclosure();
-  const [stage, setStage] = useState<Stage>("tier1");
-  const [tier1PageIndex, setTier1PageIndex] = useState(0);
-  const [input, setInput] = useState<HomeownerPathwayInput>({
-    ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
-    livingInNsw: true,
-  });
-  const [tier1Answers, setTier1Answers] = useState<Tier1AnswerMap>({});
-  const [display, setDisplay] = useState<DisplayDraft>(getInitialDisplay());
-  const [supportName, setSupportName] = useState("");
-  const [supportEmail, setSupportEmail] = useState("");
-  const [supportTried, setSupportTried] = useState("");
-  const [supportChallenge, setSupportChallenge] = useState<SupportChallengeKey | null>(null);
-  const [supportFrustration, setSupportFrustration] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
-  const [supportError, setSupportError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialQuizState] = useState(getInitialQuizState);
+  const [stage, setStage] = useState<Stage>(initialQuizState.stage);
+  const [tier1PageIndex, setTier1PageIndex] = useState(initialQuizState.tier1PageIndex);
+  const [input, setInput] = useState<HomeownerPathwayInput>(initialQuizState.input);
+  const [tier1Answers, setTier1Answers] = useState<Tier1AnswerMap>(initialQuizState.tier1Answers);
+  const [display, setDisplay] = useState<DisplayDraft>(initialQuizState.display);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const tier1Page = TIER1_PAGES[tier1PageIndex] ?? TIER1_PAGES[0];
   const dutyIntake = useMemo(() => deriveDutyIntakeState(input), [input]);
@@ -509,11 +545,9 @@ export function FirstHomeQuizFlow() {
   const preview = useMemo(() => buildHomeownerPathwayOutput(input, previewSelections), [input, previewSelections]);
   const canContinueTier1 = tier1Page.questions.every((question) => isTier1QuestionAnswered(question, tier1Answers, display));
   const canContinueTier2 = tier2Questions.every((question) => isTier2QuestionAnswered(question, input, display));
-  const canUnlockDashboard =
-    supportName.trim().length > 0 && supportChallenge !== null && supportFrustration !== null;
-  const stageLabels = dutyIntake.needsTier2 ? ["Tier 1", "Tier 2", "Final details"] : ["Tier 1", "Final details"];
-  const currentStagePosition =
-    stage === "tier1" ? 0 : stage === "tier2" && dutyIntake.needsTier2 ? 1 : stageLabels.length - 1;
+  const activeStage: Stage = stage === "tier2" && !dutyIntake.needsTier2 ? "tier1" : stage;
+  const stageLabels = dutyIntake.needsTier2 ? ["Tier 1", "Tier 2"] : ["Tier 1"];
+  const currentStagePosition = activeStage === "tier2" && dutyIntake.needsTier2 ? 1 : 0;
 
   useEffect(() => {
     setDisclosure({
@@ -528,88 +562,15 @@ export function FirstHomeQuizFlow() {
       return;
     }
 
-    const raw = window.localStorage.getItem(QUIZ_STORAGE_KEY);
-    if (!raw) {
-      return;
-    }
-
-    try {
-      const saved = JSON.parse(raw) as {
-        stage?: Stage;
-        tier1PageIndex?: number;
-        input?: HomeownerPathwayInput;
-        tier1Answers?: Tier1AnswerMap;
-        display?: DisplayDraft;
-        supportName?: string;
-        supportEmail?: string;
-        supportTried?: string;
-        supportChallenge?: SupportChallengeKey | null;
-        supportFrustration?: 1 | 2 | 3 | 4 | 5 | null;
-      };
-
-      if (saved.stage) {
-        setStage(saved.stage);
-      }
-      if (typeof saved.tier1PageIndex === "number") {
-        setTier1PageIndex(saved.tier1PageIndex);
-      }
-      if (saved.input) {
-        const savedHomeState = saved.input.homeState ?? (saved.input.livingInNsw === false ? "vic" : "nsw");
-        setInput({
-          ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
-          ...saved.input,
-          homeState: savedHomeState,
-          livingInNsw: savedHomeState === "nsw",
-        });
-      }
-      if (saved.tier1Answers) {
-        setTier1Answers(saved.tier1Answers);
-      }
-      if (saved.display) {
-        setDisplay((current) => ({
-          ...current,
-          ...saved.display,
-        }));
-      }
-      if (saved.supportName) {
-        setSupportName(saved.supportName);
-      }
-      if (saved.supportEmail) {
-        setSupportEmail(saved.supportEmail);
-      }
-      if (saved.supportTried) {
-        setSupportTried(saved.supportTried);
-      }
-      if (saved.supportChallenge) {
-        setSupportChallenge(saved.supportChallenge);
-      }
-      if (saved.supportFrustration) {
-        setSupportFrustration(saved.supportFrustration);
-      }
-    } catch {
-      window.localStorage.removeItem(QUIZ_STORAGE_KEY);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
     const timer = window.setTimeout(() => {
       window.localStorage.setItem(
         QUIZ_STORAGE_KEY,
         JSON.stringify({
-          stage,
+          stage: activeStage,
           tier1PageIndex,
           input,
           tier1Answers,
           display,
-          supportName,
-          supportEmail,
-          supportTried,
-          supportChallenge,
-          supportFrustration,
         }),
       );
     }, 150);
@@ -618,23 +579,12 @@ export function FirstHomeQuizFlow() {
       window.clearTimeout(timer);
     };
   }, [
-    stage,
+    activeStage,
     tier1PageIndex,
     input,
     tier1Answers,
     display,
-    supportName,
-    supportEmail,
-    supportTried,
-    supportChallenge,
-    supportFrustration,
   ]);
-
-  useEffect(() => {
-    if (stage === "tier2" && !dutyIntake.needsTier2) {
-      setStage("account");
-    }
-  }, [dutyIntake.needsTier2, stage]);
 
   function answerTier1Boolean(
     question: Extract<Tier1Question, { type: "boolean" }>,
@@ -692,7 +642,7 @@ export function FirstHomeQuizFlow() {
       return;
     }
 
-    setStage(dutyIntake.needsTier2 ? "tier2" : "account");
+    setStage("tier2");
   }
 
   function goBackTier1() {
@@ -706,90 +656,34 @@ export function FirstHomeQuizFlow() {
     setTier1PageIndex(TIER1_PAGES.length - 1);
   }
 
-  async function createAccountAndContinue() {
-    if (supportName.trim().length === 0) {
-      setSupportError("Enter your name before continuing.");
-      return;
-    }
-
-    if (supportChallenge === null) {
-      setSupportError("Select your biggest challenge before continuing.");
-      return;
-    }
-
-    if (supportFrustration === null) {
-      setSupportError("Select how frustrating that challenge is before continuing.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setSupportError(null);
-
+  async function completeQuiz() {
+    setIsCompleting(true);
     const dashboardSelections = buildDefaultSelections(input);
-    const withSchemes = buildHomeownerPathwayOutput(input, dashboardSelections);
-    const withoutSchemes = buildHomeownerPathwayOutput(input, {
-      ...dashboardSelections,
-      includeGuaranteeComparison: false,
-      includeFhssConcept: false,
-      activeDepositScenario: "baseline-20",
-    });
-
     const snapshot: HomeownerDashboardSnapshot = {
       input,
       selections: dashboardSelections,
-      account: {
-        name: supportName.trim() || "there",
-        email: supportEmail.trim(),
-        story: supportTried.trim(),
-      },
       incomeFrequency: "annually",
       expenseFrequency: "monthly",
       sentAt: new Date().toISOString(),
     };
 
     try {
-      const supportResponse = await fetch("/api/quiz/dashboard-support", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          challenge: supportChallenge,
-          frustrationLevel: supportFrustration,
-          name: supportName.trim() || null,
-          email: supportEmail.trim() || null,
-          comment: supportTried.trim() || null,
-          sourcePage: "/First-Home-Quiz",
-        }),
-      });
-
-      if (!supportResponse.ok) {
-        throw new Error("Failed to save support survey response");
-      }
-
       if (typeof window !== "undefined") {
         window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
         window.localStorage.removeItem(QUIZ_STORAGE_KEY);
       }
 
-      await fetch("/api/homeowner-summary", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      await trackResearchEvent({
+        surface: "quiz",
+        eventName: "quiz_completed",
+        properties: {
+          homeState: input.homeState ?? "unknown",
+          targetPropertyPrice: input.targetPropertyPrice,
         },
-        body: JSON.stringify({
-          account: snapshot.account,
-          input,
-          withSchemes,
-          withoutSchemes,
-        }),
       });
     } catch {
-      setSupportError("We could not save your response. Please try again.");
-      setIsSubmitting(false);
+      setIsCompleting(false);
       return;
-    } finally {
-      setIsSubmitting(false);
     }
 
     router.push("/first-home-dashboard");
@@ -801,14 +695,12 @@ export function FirstHomeQuizFlow() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
-              {stage === "tier1" ? tier1Page.title : stage === "tier2" ? "Tier 2: Duty details" : "Final details"}
+              {activeStage === "tier1" ? tier1Page.title : "Tier 2: Duty details"}
             </p>
             <p className="mt-1 text-sm text-foreground-soft">
-              {stage === "tier1"
+              {activeStage === "tier1"
                 ? `Page ${tier1PageIndex + 1} of ${TIER1_PAGES.length}`
-                : stage === "tier2"
-                  ? "Only shown when duty needs more detail"
-                  : "One last step before your results and dashboard"}
+                : "Only shown when duty needs more detail"}
             </p>
           </div>
           <div className="flex gap-2">
@@ -824,7 +716,7 @@ export function FirstHomeQuizFlow() {
         </div>
       </section>
 
-      {stage === "tier1" ? (
+      {activeStage === "tier1" ? (
         <section className="space-y-4">
           {tier1Page.questions.map((question) => {
             if (question.type === "choice") {
@@ -909,14 +801,23 @@ export function FirstHomeQuizFlow() {
               <ChevronLeft className="mr-1 h-4 w-4" />
               Back
             </Button>
-            <Button data-testid="tier1-continue" type="button" onClick={goNextTier1} disabled={!canContinueTier1}>
-              Continue
+            <Button
+              data-testid="tier1-continue"
+              type="button"
+              onClick={tier1PageIndex === TIER1_PAGES.length - 1 && !dutyIntake.needsTier2 ? () => void completeQuiz() : goNextTier1}
+              disabled={!canContinueTier1 || isCompleting}
+            >
+              {tier1PageIndex === TIER1_PAGES.length - 1 && !dutyIntake.needsTier2
+                ? isCompleting
+                  ? "Saving..."
+                  : "View dashboard"
+                : "Continue"}
             </Button>
           </div>
         </section>
       ) : null}
 
-      {stage === "tier2" ? (
+      {activeStage === "tier2" ? (
         <Card className="animate-fade-up space-y-6 bg-white p-6 md:p-8">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Tier 2</p>
@@ -1017,132 +918,11 @@ export function FirstHomeQuizFlow() {
             <Button
               data-testid="tier2-continue"
               type="button"
-              onClick={() => setStage("account")}
-              disabled={!canContinueTier2}
+              onClick={() => void completeQuiz()}
+              disabled={!canContinueTier2 || isCompleting}
             >
-              Next
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </Button>
-          </div>
-        </Card>
-      ) : null}
-
-      {stage === "account" ? (
-        <Card className="animate-fade-up space-y-6 border-primary/30 bg-gradient-to-br from-[#f4faef] to-[#edf6f8] p-6 md:p-8">
-          {preview.dutyIntake.uncertaintyActive ? (
-            <div className="rounded-2xl border border-border bg-[#f1f0ec] p-4 text-sm text-foreground-soft">
-              Duty outputs will stay marked with * until the missing advanced details are filled or the Tier 3 edge case is resolved manually.{" "}
-              {preview.dutyIntake.reasons.join(" ")}
-            </div>
-          ) : null}
-
-          <div className="space-y-4 rounded-2xl border border-primary/20 bg-white/80 p-4 md:p-5">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary-strong">
-                Before you get your results...
-              </p>
-              <h3 className="text-2xl font-semibold tracking-tight">What is the hardest part of saving for your first home?</h3>
-              <p className="text-sm text-foreground-soft">
-                Enter your name and tell us what feels hardest so the dashboard can open with the right context.
-              </p>
-            </div>
-            <div className="grid gap-4">
-              <label className="grid gap-2 text-sm font-semibold">
-                <span>Name</span>
-                <Input value={supportName} onChange={(event) => setSupportName(event.currentTarget.value)} />
-              </label>
-            </div>
-            <div className="space-y-2 rounded-xl border border-border bg-white p-3 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground-soft">
-                Select your biggest challenge right now:
-              </p>
-              {SUPPORT_CHALLENGE_OPTIONS.map((option) => (
-                <label key={option.key} className="flex items-start gap-2">
-                  <input
-                    data-testid={`quiz-support-challenge-${option.key}`}
-                    type="radio"
-                    name="support-challenge"
-                    className="mt-0.5 h-4 w-4 rounded-full accent-primary"
-                    checked={supportChallenge === option.key}
-                    onChange={() => setSupportChallenge(option.key)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-              <div className="space-y-2 pt-2">
-                <p className="text-xs text-foreground-soft">How frustrating is this problem?</p>
-                <div className="flex items-center gap-1.5">
-                  {([1, 2, 3, 4, 5] as const).map((value) => (
-                    <button
-                      key={`quiz-support-frustration-${value}`}
-                      data-testid={`quiz-support-frustration-${value}`}
-                      type="button"
-                      className={`h-8 w-8 rounded-full border text-xs font-semibold transition ${
-                        supportFrustration === value
-                          ? "border-primary bg-primary text-white"
-                          : "border-border bg-surface text-foreground hover:bg-surface-muted"
-                      }`}
-                      onClick={() => setSupportFrustration(value)}
-                      aria-label={`Frustration level ${value}`}
-                    >
-                      {value}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-foreground-soft">Minor -&gt; Extremely frustrating</p>
-              </div>
-              <label className="grid gap-1.5">
-                <span className="text-xs text-foreground-soft">
-                  Leave your email if you&apos;d like early access to tools that solve this
-                </span>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={supportEmail}
-                  onChange={(event) => setSupportEmail(event.currentTarget.value)}
-                />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-xs text-foreground-soft">What have you already tried to solve this</span>
-                <textarea
-                  className="min-h-20 rounded-xl border border-border bg-[#f9f8f6] px-4 py-3 text-sm text-foreground outline-none ring-0 placeholder:text-[#9aa097] focus:border-primary focus:bg-white"
-                  placeholder="Spreadsheet, financial advisor, nothing yet, etc."
-                  value={supportTried}
-                  onChange={(event) => setSupportTried(event.currentTarget.value)}
-                />
-              </label>
-            </div>
-            <p className="text-xs text-foreground-soft">
-              Name, biggest challenge, and frustration level are required before the dashboard unlocks.
-            </p>
-          </div>
-
-          {supportError ? <p className="text-sm text-[#8a2f2f]">{supportError}</p> : null}
-
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (dutyIntake.needsTier2) {
-                  setStage("tier2");
-                  return;
-                }
-
-                setStage("tier1");
-                setTier1PageIndex(TIER1_PAGES.length - 1);
-              }}
-            >
-              <ChevronLeft className="mr-1 h-4 w-4" />
-              Back
-            </Button>
-            <Button
-              data-testid="create-free-account"
-              type="button"
-              onClick={() => void createAccountAndContinue()}
-              disabled={isSubmitting || !canUnlockDashboard}
-            >
-              {isSubmitting ? "Saving..." : "Continue to your dashboard"}
+              {isCompleting ? "Saving..." : "View dashboard"}
+              {isCompleting ? null : <ChevronRight className="ml-1 h-4 w-4" />}
             </Button>
           </div>
         </Card>

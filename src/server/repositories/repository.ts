@@ -6,6 +6,10 @@ import type {
   ProgressEntryRecord,
   ProgressKind,
   QuizSubmissionRecord,
+  ResearchEventName,
+  ResearchEventRecord,
+  ResearchSubmissionRecord,
+  ResearchSubmissionSurface,
   ReadinessReportModel,
   SavedScenarioRecord,
   SubscriptionRecord,
@@ -34,6 +38,23 @@ export type AppRepository = {
     answers: Record<string, unknown>;
     result: Record<string, unknown>;
   }): Promise<QuizSubmissionRecord>;
+  saveResearchSubmission(input: {
+    userId?: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: ResearchSubmissionSurface;
+    promptVersion: string;
+    response: Record<string, unknown>;
+    result: Record<string, unknown>;
+  }): Promise<ResearchSubmissionRecord>;
+  saveResearchEvent(input: {
+    userId?: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: ResearchEventRecord["surface"];
+    eventName: ResearchEventName;
+    properties?: Record<string, unknown>;
+  }): Promise<ResearchEventRecord>;
   listSavedScenarios(userId: string): Promise<SavedScenarioRecord[]>;
   saveScenario(input: {
     userId: string;

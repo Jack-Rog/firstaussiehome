@@ -5,6 +5,10 @@ import type {
   ProgressEntryRecord,
   ProgressKind,
   QuizSubmissionRecord,
+  ResearchEventName,
+  ResearchEventRecord,
+  ResearchSubmissionRecord,
+  ResearchSubmissionSurface,
   ReadinessReportModel,
   SavedScenarioRecord,
   SubscriptionRecord,
@@ -18,6 +22,8 @@ type Store = {
   progress: ProgressEntryRecord[];
   bookmarks: BookmarkRecord[];
   quizSubmissions: QuizSubmissionRecord[];
+  researchSubmissions: ResearchSubmissionRecord[];
+  researchEvents: ResearchEventRecord[];
   scenarios: SavedScenarioRecord[];
   bankImports: BankImportRecord[];
   subscriptions: SubscriptionRecord[];
@@ -80,6 +86,8 @@ function createSeedStore(): Store {
       },
     ],
     quizSubmissions: [],
+    researchSubmissions: [],
+    researchEvents: [],
     scenarios: [
       {
         id: id(),
@@ -183,6 +191,52 @@ export class MemoryRepository {
       ...input,
     };
     this.store.quizSubmissions.push(created);
+    return created;
+  }
+
+  async saveResearchSubmission(input: {
+    userId?: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: ResearchSubmissionSurface;
+    promptVersion: string;
+    response: Record<string, unknown>;
+    result: Record<string, unknown>;
+  }) {
+    const created: ResearchSubmissionRecord = {
+      id: id(),
+      createdAt: new Date().toISOString(),
+      userId: input.userId ?? null,
+      anonymousId: input.anonymousId,
+      sessionId: input.sessionId,
+      surface: input.surface,
+      promptVersion: input.promptVersion,
+      response: input.response,
+      result: input.result,
+    };
+    this.store.researchSubmissions.push(created);
+    return created;
+  }
+
+  async saveResearchEvent(input: {
+    userId?: string | null;
+    anonymousId: string;
+    sessionId: string;
+    surface: ResearchEventRecord["surface"];
+    eventName: ResearchEventName;
+    properties?: Record<string, unknown>;
+  }) {
+    const created: ResearchEventRecord = {
+      id: id(),
+      createdAt: new Date().toISOString(),
+      userId: input.userId ?? null,
+      anonymousId: input.anonymousId,
+      sessionId: input.sessionId,
+      surface: input.surface,
+      eventName: input.eventName,
+      properties: input.properties ?? {},
+    };
+    this.store.researchEvents.push(created);
     return created;
   }
 
