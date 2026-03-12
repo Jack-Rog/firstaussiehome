@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "setup:local": "npm run prisma:generate && playwright install chromium",
+    "postinstall": "prisma generate",
     "build": "next build",
     "start": "next start",
     "validate:stamp-duty-rules": "node scripts/validate-stamp-duty-rules.mjs",
