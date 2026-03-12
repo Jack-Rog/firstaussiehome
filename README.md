@@ -18,9 +18,10 @@ Aussies First Home is a Next.js MVP for Australian graduates who want a guided w
 
 1. Import the repo into Vercel.
 2. Set the environment variables from `.env.example`.
-3. If using Postgres, add a Vercel Postgres connection string to `DATABASE_URL`.
-4. Run `npm run prisma:generate` during the build step if the deployment environment does not do it automatically.
-5. Add the Stripe webhook endpoint to `/api/stripe/webhook`.
+3. For the linked Supabase project `FirstAussieHome` (`hhwwraqiapittuzfkpfd`), use the pooled connection string for `DATABASE_URL` and the direct connection string for `DIRECT_URL`.
+4. Set `USE_MEMORY_DB=false` anywhere you want the app to use Supabase instead of demo memory mode.
+5. Run `npm run prisma:generate` during the build step if the deployment environment does not do it automatically.
+6. Add the Stripe webhook endpoint to `/api/stripe/webhook`.
 
 ## Environment variables
 
@@ -28,7 +29,10 @@ Aussies First Home is a Next.js MVP for Australian graduates who want a guided w
 - `AUTH_SECRET`
 - `EMAIL_FROM`
 - `RESEND_API_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `DATABASE_URL`
+- `DIRECT_URL`
 - `USE_MEMORY_DB`
 - `ENABLE_TEST_AUTH`
 - `ENABLE_ALT_HOME_HERO`
@@ -52,10 +56,19 @@ npm run dev
 
 ### Full local mode
 
-1. Set `DATABASE_URL`.
-2. Run `npm run prisma:generate`.
-3. Apply migrations with `npm run prisma:migrate`.
-4. Add real Auth and Stripe credentials.
+1. Copy `.env.example` to `.env` if needed, then replace `[YOUR-SUPABASE-DB-PASSWORD]` in both Supabase connection strings.
+2. Set `USE_MEMORY_DB=false`.
+3. Run `npm run prisma:generate`.
+4. The Supabase schema for this repo has already been applied via MCP. Use `npm run prisma:migrate` only for future schema changes.
+5. Add real Auth and Stripe credentials.
+
+### Supabase project wiring
+
+- Project ref: `hhwwraqiapittuzfkpfd`
+- API URL: `https://hhwwraqiapittuzfkpfd.supabase.co`
+- `DATABASE_URL`: transaction pooler host `aws-1-ap-northeast-2.pooler.supabase.com:6543`
+- `DIRECT_URL`: session pooler host `aws-1-ap-northeast-2.pooler.supabase.com:5432`
+- The direct `db.hhwwraqiapittuzfkpfd.supabase.co` hostname did not resolve from this workspace, so Prisma CLI is configured against the reachable session pooler instead.
 
 ## Tests
 
