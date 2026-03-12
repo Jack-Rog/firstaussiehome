@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Leaf, Shield, Sparkles, Target } from "lucide-react";
 import { AussiesFirstHomeLogo } from "@/components/branding/aussies-first-home-logo";
 import { GlossaryPopover } from "@/components/ui/glossary-popover";
+import { REFERENCE_LINKS } from "@/src/lib/references";
 
 type SchemeHighlight = {
   metric: string;
@@ -65,16 +66,36 @@ const SCHEME_HIGHLIGHTS: SchemeHighlight[] = [
 ];
 
 const TRUSTED_SOURCES = [
-  "Services Australia",
-  "Australian Taxation Office",
-  "Housing Australia",
-  "State Revenue Offices",
-];
+  {
+    label: "Services Australia",
+    href: "https://www.servicesaustralia.gov.au/financial-information-service",
+    note: "Services Australia Financial Information Service.",
+  },
+  {
+    label: "Australian Taxation Office",
+    href: REFERENCE_LINKS.FIRSTHOME_FHSS.href,
+    note: REFERENCE_LINKS.FIRSTHOME_FHSS.note,
+  },
+  {
+    label: "Housing Australia",
+    href: REFERENCE_LINKS.FIRSTHOME_HOME_GUARANTEE.href,
+    note: REFERENCE_LINKS.FIRSTHOME_HOME_GUARANTEE.note,
+  },
+  {
+    label: "State Revenue Offices",
+    href: "https://www.revenue.nsw.gov.au/grants-schemes/first-home-buyer/assistance-scheme",
+    note: "Official state revenue office first-home duty relief guidance.",
+  },
+] as const;
 
 export function HomeownerGatewayHero() {
-  const targetSavings = useMemo(
-    () => SCHEME_HIGHLIGHTS.reduce((total, item) => total + item.amount, 0),
+  const sortedSchemeHighlights = useMemo(
+    () => [...SCHEME_HIGHLIGHTS].sort((left, right) => right.amount - left.amount),
     [],
+  );
+  const targetSavings = useMemo(
+    () => sortedSchemeHighlights.reduce((total, item) => total + item.amount, 0),
+    [sortedSchemeHighlights],
   );
   const [animatedSavings, setAnimatedSavings] = useState(0);
 
@@ -141,13 +162,20 @@ export function HomeownerGatewayHero() {
 
             <div className="rounded-[1.25rem] border border-border bg-white/88 p-4 shadow-[0_10px_24px_rgba(33,47,37,0.08)]">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Dynamic pathway</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Reduce your upfront cost</p>
                 <p className="text-xs text-foreground-soft">Educational estimate only</p>
               </div>
               <div className="relative space-y-3">
                 <div className="absolute bottom-3 left-3 top-3 w-px bg-primary/25" />
-                {SCHEME_HIGHLIGHTS.map((scheme, index) => (
-                  <div key={scheme.title} className="relative animate-fade-up pl-8" style={{ animationDelay: `${120 + index * 70}ms` }}>
+                {sortedSchemeHighlights.map((scheme, index) => (
+                  <div
+                    key={scheme.title}
+                    className="relative animate-fade-up pl-8"
+                    style={{
+                      animationDelay: `${120 + index * 70}ms`,
+                      zIndex: sortedSchemeHighlights.length - index,
+                    }}
+                  >
                     <span className="absolute left-0 top-4 inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white">
                       {index + 1}
                     </span>
@@ -178,7 +206,7 @@ export function HomeownerGatewayHero() {
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {SCHEME_HIGHLIGHTS.map((scheme) => (
+          {sortedSchemeHighlights.map((scheme) => (
             <article key={`discover-${scheme.title}`} className="rounded-[1.25rem] border border-border bg-white/88 p-5">
               <div className={`inline-flex rounded-full bg-gradient-to-r px-3 py-1 text-xs font-semibold text-white ${scheme.colorClass}`}>
                 {scheme.metric}
@@ -208,16 +236,26 @@ export function HomeownerGatewayHero() {
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
             {TRUSTED_SOURCES.map((source) => (
-              <div key={source} className="rounded-lg bg-surface-muted px-4 py-3 text-sm font-semibold text-foreground-soft">
-                {source}
-              </div>
+              <a
+                key={source.label}
+                href={source.href}
+                target="_blank"
+                rel="noreferrer"
+                title={source.note}
+                className="rounded-lg bg-surface-muted px-4 py-3 text-sm font-semibold text-foreground-soft transition hover:-translate-y-0.5 hover:bg-primary-soft hover:text-primary"
+              >
+                {source.label}
+              </a>
             ))}
           </div>
         </div>
       </section>
 
       <section className="animate-fade-up grid gap-4 md:grid-cols-3">
-        <div className="rounded-[1.25rem] border border-border bg-white/85 p-6">
+        <Link
+          href="/First-Home-Quiz"
+          className="rounded-[1.25rem] border border-border bg-white/85 p-6 transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_12px_24px_rgba(33,47,37,0.08)]"
+        >
           <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <Target className="h-5 w-5" />
           </div>
@@ -225,8 +263,11 @@ export function HomeownerGatewayHero() {
           <p className="mt-2 text-sm text-foreground-soft">
             Keep the total bill of buying a house front-and-centre while you compare pathways.
           </p>
-        </div>
-        <div className="rounded-[1.25rem] border border-border bg-white/85 p-6">
+        </Link>
+        <Link
+          href="/learn"
+          className="rounded-[1.25rem] border border-border bg-white/85 p-6 transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_12px_24px_rgba(33,47,37,0.08)]"
+        >
           <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <Shield className="h-5 w-5" />
           </div>
@@ -234,8 +275,11 @@ export function HomeownerGatewayHero() {
           <p className="mt-2 text-sm text-foreground-soft">
             Safety links and disclosure details stay available throughout the flow.
           </p>
-        </div>
-        <div className="rounded-[1.25rem] border border-border bg-white/85 p-6">
+        </Link>
+        <Link
+          href="/eoi/tools"
+          className="rounded-[1.25rem] border border-border bg-white/85 p-6 transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_12px_24px_rgba(33,47,37,0.08)]"
+        >
           <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <Sparkles className="h-5 w-5" />
           </div>
@@ -243,7 +287,7 @@ export function HomeownerGatewayHero() {
           <p className="mt-2 text-sm text-foreground-soft">
             Tell us what still feels hard so we can decide what tools or support are actually worth building next.
           </p>
-        </div>
+        </Link>
       </section>
     </div>
   );

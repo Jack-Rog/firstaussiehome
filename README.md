@@ -26,8 +26,6 @@ Aussies First Home is a Next.js MVP for Australian graduates who want a guided w
 
 - `NEXT_PUBLIC_APP_URL`
 - `AUTH_SECRET`
-- `AUTH_GOOGLE_ID`
-- `AUTH_GOOGLE_SECRET`
 - `EMAIL_FROM`
 - `RESEND_API_KEY`
 - `DATABASE_URL`
@@ -45,7 +43,7 @@ Aussies First Home is a Next.js MVP for Australian graduates who want a guided w
 
 ### Demo mode
 
-If `DATABASE_URL` is empty or `USE_MEMORY_DB=true`, the app runs in in-memory demo mode. This keeps `npm run dev` usable without Google, Resend, Stripe, or a database.
+If `DATABASE_URL` is empty or `USE_MEMORY_DB=true`, the app runs in in-memory demo mode. This keeps `npm run dev` usable without Resend, Stripe, or a database.
 
 ```bash
 npm install
@@ -76,11 +74,10 @@ npm run test:e2e
 4. Visit `/tools/deposit-runway` and confirm the slider changes the timeline.
 5. Visit `/pricing` and confirm the dev message appears when Stripe vars are missing.
 6. Use `/pricing` in demo mode and confirm `/model` unlocks after the local demo checkout path.
-7. In a real integration environment, test Google sign-in, Resend magic links, Stripe checkout, and a forwarded Stripe webhook.
+7. In a real integration environment, test Resend magic links, Stripe checkout, and a forwarded Stripe webhook.
 
 ## Real integration notes
 
-- Google OAuth: add the deployed callback URL in the Google Cloud console.
 - Resend magic links: use a verified sender for `EMAIL_FROM`.
 - Stripe checkout: set `STRIPE_PRO_PRICE_ID` to the live recurring price ID.
 - Stripe webhook: forward events for `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`.

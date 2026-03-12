@@ -30,7 +30,7 @@ const DEPOSIT_BENCHMARK: BenchmarkDefinition = {
   sourceLabel: "Public first-home deposit readiness proxy",
   sourceScope: "5%, 10%, and 20% hurdle bands",
   lastReviewed: BENCHMARK_REVIEW_DATE,
-  href: "https://www.housingaustralia.gov.au/support-buy-home/home-guarantee-scheme",
+  href: "https://firsthomebuyers.gov.au/australian-government-5-percent-deposit-scheme",
   lowerMax: 0.05,
   middleMax: 0.15,
   lowDescriptor: "below the common first-home hurdle",

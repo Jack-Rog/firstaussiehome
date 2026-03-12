@@ -65,7 +65,7 @@ export const REFERENCE_LINKS: Record<ReferenceKey, ReferenceLink> = {
   FIRSTHOME_HOME_GUARANTEE: {
     key: "FIRSTHOME_HOME_GUARANTEE",
     label: "Housing Australia Home Guarantee Scheme",
-    href: "https://www.housingaustralia.gov.au/support-buy-home/home-guarantee-scheme",
+    href: "https://firsthomebuyers.gov.au/australian-government-5-percent-deposit-scheme",
     note: "Federal guarantee program information.",
   },
   FIRSTHOME_FHSS: {
@@ -95,7 +95,7 @@ export const REFERENCE_LINKS: Record<ReferenceKey, ReferenceLink> = {
   NSW_GOV_SHARED_EQUITY: {
     key: "NSW_GOV_SHARED_EQUITY",
     label: "NSW shared equity concept note",
-    href: "https://www.nsw.gov.au/housing-and-construction",
+    href: "https://www.revenue.nsw.gov.au/grants-schemes/approved-shared-equity-schemes",
     note: "High-level NSW housing support references.",
   },
   TODO_HELP_TO_BUY: {

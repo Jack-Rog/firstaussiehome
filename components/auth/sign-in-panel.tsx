@@ -7,12 +7,10 @@ import { Card, CardText, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export function SignInPanel({
-  hasGoogle,
   hasEmail,
   hasConsoleMailer,
   hasDemo,
 }: {
-  hasGoogle: boolean;
   hasEmail: boolean;
   hasConsoleMailer: boolean;
   hasDemo: boolean;
@@ -23,13 +21,8 @@ export function SignInPanel({
     <Card className="space-y-5">
       <CardTitle>Sign in</CardTitle>
       <CardText>
-        Use Google, a magic link, or the local demo sign-in when the app is running without full integrations.
+        Use a magic link, or the local demo sign-in when the app is running without full integrations.
       </CardText>
-      {hasGoogle ? (
-        <Button type="button" onClick={() => void signIn("google", { callbackUrl: "/" })}>
-          Continue with Google
-        </Button>
-      ) : null}
       {hasEmail ? (
         <div className="space-y-3">
           <Input type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} />

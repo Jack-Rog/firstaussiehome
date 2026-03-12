@@ -1,7 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Email from "next-auth/providers/email";
-import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { PrismaClient } from "@prisma/client";
@@ -22,15 +21,6 @@ function getAuthPrisma() {
 
 function buildProviders() {
   const providers = [];
-
-  if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
-    providers.push(
-      Google({
-        clientId: process.env.AUTH_GOOGLE_ID,
-        clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      }),
-    );
-  }
 
   if (!isMemoryMode() && process.env.EMAIL_FROM) {
     if (process.env.RESEND_API_KEY) {
