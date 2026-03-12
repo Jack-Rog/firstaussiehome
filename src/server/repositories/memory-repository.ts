@@ -179,8 +179,16 @@ export class MemoryRepository {
     return this.listBookmarks(input.userId);
   }
 
+  async listQuizSubmissions(input?: { quizType?: QuizSubmissionRecord["quizType"]; limit?: number }) {
+    const entries = [...this.store.quizSubmissions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const filtered = input?.quizType ? entries.filter((entry) => entry.quizType === input.quizType) : entries;
+    return typeof input?.limit === "number" ? filtered.slice(0, input.limit) : filtered;
+  }
+
   async saveQuizSubmission(input: {
-    userId: string;
+    userId?: string | null;
+    anonymousId?: string | null;
+    sessionId?: string | null;
     quizType: QuizSubmissionRecord["quizType"];
     answers: Record<string, unknown>;
     result: Record<string, unknown>;
@@ -188,10 +196,20 @@ export class MemoryRepository {
     const created: QuizSubmissionRecord = {
       id: id(),
       createdAt: new Date().toISOString(),
-      ...input,
+      userId: input.userId ?? null,
+      anonymousId: input.anonymousId ?? null,
+      sessionId: input.sessionId ?? null,
+      quizType: input.quizType,
+      answers: input.answers,
+      result: input.result,
     };
     this.store.quizSubmissions.push(created);
     return created;
+  }
+
+  async listResearchSubmissions(input?: { limit?: number }) {
+    const entries = [...this.store.researchSubmissions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return typeof input?.limit === "number" ? entries.slice(0, input.limit) : entries;
   }
 
   async saveResearchSubmission(input: {
@@ -216,6 +234,18 @@ export class MemoryRepository {
     };
     this.store.researchSubmissions.push(created);
     return created;
+  }
+
+  async listResearchEvents(input?: {
+    limit?: number;
+    surface?: ResearchEventRecord["surface"];
+    eventName?: ResearchEventName;
+  }) {
+    const entries = [...this.store.researchEvents]
+      .filter((entry) => (input?.surface ? entry.surface === input.surface : true))
+      .filter((entry) => (input?.eventName ? entry.eventName === input.eventName : true))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return typeof input?.limit === "number" ? entries.slice(0, input.limit) : entries;
   }
 
   async saveResearchEvent(input: {

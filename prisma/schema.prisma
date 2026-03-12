@@ -86,13 +86,18 @@ model Bookmark {
 }
 
 model QuizSubmission {
-  id        String   @id @default(cuid())
-  userId    String
-  quizType  String
-  answers   Json
-  result    Json
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String?
+  anonymousId String?
+  sessionId   String?
+  quizType    String
+  answers     Json
+  result      Json
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([quizType, createdAt])
+  @@index([anonymousId, createdAt])
 }
 
 model ResearchSubmission {

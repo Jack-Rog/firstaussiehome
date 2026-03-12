@@ -10,10 +10,12 @@ export function SignInPanel({
   hasEmail,
   hasConsoleMailer,
   hasDemo,
+  callbackUrl,
 }: {
   hasEmail: boolean;
   hasConsoleMailer: boolean;
   hasDemo: boolean;
+  callbackUrl: string;
 }) {
   const [email, setEmail] = useState("demo@aussiesfirsthome.local");
 
@@ -31,7 +33,7 @@ export function SignInPanel({
             variant="secondary"
             onClick={() =>
               startTransition(() => {
-                void signIn("email", { email, callbackUrl: "/" });
+                void signIn("email", { email, callbackUrl });
               })
             }
           >
@@ -53,7 +55,7 @@ export function SignInPanel({
               void signIn("credentials", {
                 email,
                 name: "First Aussie Home Demo User",
-                callbackUrl: "/model",
+                callbackUrl,
               });
             })
           }

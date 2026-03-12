@@ -29,6 +29,8 @@ Aussies First Home is a Next.js MVP for Australian graduates who want a guided w
 - `AUTH_SECRET`
 - `EMAIL_FROM`
 - `RESEND_API_KEY`
+- `ADMIN_EMAILS`
+- `RESEARCH_ALERT_TO`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `DATABASE_URL`
@@ -59,8 +61,10 @@ npm run dev
 1. Copy `.env.example` to `.env` if needed, then replace `[YOUR-SUPABASE-DB-PASSWORD]` in both Supabase connection strings.
 2. Set `USE_MEMORY_DB=false`.
 3. Run `npm run prisma:generate`.
-4. The Supabase schema for this repo has already been applied via MCP. Use `npm run prisma:migrate` only for future schema changes.
+4. Run `npm run prisma:migrate` when you need to apply the checked-in Prisma migrations to a new environment.
 5. Add real Auth and Stripe credentials.
+6. Set `ADMIN_EMAILS` to the signed-in inboxes allowed to open `/admin/research`.
+7. Set `RESEARCH_ALERT_TO` if survey alerts should go to a different inbox than the admin list.
 
 ### Supabase project wiring
 
@@ -88,6 +92,7 @@ npm run test:e2e
 5. Visit `/pricing` and confirm the dev message appears when Stripe vars are missing.
 6. Use `/pricing` in demo mode and confirm `/model` unlocks after the local demo checkout path.
 7. In a real integration environment, test Resend magic links, Stripe checkout, and a forwarded Stripe webhook.
+8. Visit `/admin/research` with an allowed admin email and confirm new survey responses and public quiz submissions appear.
 
 ## Real integration notes
 

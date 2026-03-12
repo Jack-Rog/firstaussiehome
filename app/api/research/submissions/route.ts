@@ -20,6 +20,7 @@ import type {
 } from "@/src/lib/types";
 import { getCurrentUser } from "@/src/lib/route-guards";
 import { getRepository } from "@/src/server/repositories/repository";
+import { sendResearchSubmissionAlert } from "@/src/server/services/research-alert-service";
 
 const submissionSchema = z
   .object({
@@ -164,6 +165,12 @@ export async function POST(request: Request) {
     },
     result,
   });
+
+  try {
+    await sendResearchSubmissionAlert(submission);
+  } catch (error) {
+    console.error("Failed to send research submission alert", error);
+  }
 
   return NextResponse.json({
     saved: true,

@@ -32,12 +32,21 @@ export type AppRepository = {
     slug: string;
     label: string;
   }): Promise<BookmarkRecord[]>;
+  listQuizSubmissions(input?: {
+    quizType?: QuizSubmissionRecord["quizType"];
+    limit?: number;
+  }): Promise<QuizSubmissionRecord[]>;
   saveQuizSubmission(input: {
-    userId: string;
+    userId?: string | null;
+    anonymousId?: string | null;
+    sessionId?: string | null;
     quizType: QuizSubmissionRecord["quizType"];
     answers: Record<string, unknown>;
     result: Record<string, unknown>;
   }): Promise<QuizSubmissionRecord>;
+  listResearchSubmissions(input?: {
+    limit?: number;
+  }): Promise<ResearchSubmissionRecord[]>;
   saveResearchSubmission(input: {
     userId?: string | null;
     anonymousId: string;
@@ -47,6 +56,11 @@ export type AppRepository = {
     response: Record<string, unknown>;
     result: Record<string, unknown>;
   }): Promise<ResearchSubmissionRecord>;
+  listResearchEvents(input?: {
+    limit?: number;
+    surface?: ResearchEventRecord["surface"];
+    eventName?: ResearchEventName;
+  }): Promise<ResearchEventRecord[]>;
   saveResearchEvent(input: {
     userId?: string | null;
     anonymousId: string;

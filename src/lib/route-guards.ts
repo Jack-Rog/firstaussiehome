@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import { notFound, redirect } from "next/navigation";
+import { hasAdminAccess } from "@/src/lib/admin";
 import { auth } from "@/src/lib/auth";
 import { isMemoryMode } from "@/src/lib/demo-mode";
 import { getProDemoCookieName, hasValidProDemoCookie } from "@/src/lib/stripe";
@@ -46,4 +48,18 @@ export async function hasProAccess() {
 
   const subscription = await getRepository().getSubscription(user.id);
   return subscription.status === "active" || subscription.status === "trialing" || subscription.status === "demo";
+}
+
+export async function requireAdminUser(callbackUrl = "/admin/research") {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect(`/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+  }
+
+  if (!hasAdminAccess(user)) {
+    notFound();
+  }
+
+  return user;
 }

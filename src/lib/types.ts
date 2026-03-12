@@ -560,8 +560,10 @@ export type BookmarkRecord = {
 
 export type QuizSubmissionRecord = {
   id: string;
-  userId: string;
-  quizType: "onboarding" | "fundamentals" | "schemes";
+  userId: string | null;
+  anonymousId: string | null;
+  sessionId: string | null;
+  quizType: "first-home" | "onboarding" | "fundamentals" | "schemes";
   answers: Record<string, unknown>;
   result: Record<string, unknown>;
   createdAt: string;

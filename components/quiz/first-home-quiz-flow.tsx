@@ -7,17 +7,17 @@ import { useDisclosure } from "@/components/compliance/disclosure-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { buildDefaultHomeownerPathwaySelections } from "@/src/lib/analysis/homeowner-pathway-defaults";
 import { deriveDutyIntakeState } from "@/src/lib/analysis/homeowner-duty-intake";
 import {
   buildHomeownerPathwayOutput,
   DEFAULT_HOMEOWNER_PATHWAY_INPUT,
-  DEFAULT_HOMEOWNER_PATHWAY_SELECTIONS,
 } from "@/src/lib/analysis/homeowner-pathway-analysis";
 import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
-  type HomeownerDashboardSnapshot,
+  createHomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
-import { trackResearchEvent } from "@/src/lib/research-client";
+import { getAnonymousId, getSessionId, trackResearchEvent } from "@/src/lib/research-client";
 import type {
   DutyTier2FieldId,
   HomeownerPathwayInput,
@@ -378,30 +378,6 @@ const TIER2_QUESTION_BY_FIELD: Record<DutyTier2FieldId, Tier2Question> = {
       ntHouseAndLandEligiblePath: answer,
     }),
   },
-};
-
-function buildDefaultSelections(input: HomeownerPathwayInput): HomeownerPathwaySelections {
-  const preview = buildHomeownerPathwayOutput(input, {
-    ...DEFAULT_HOMEOWNER_PATHWAY_SELECTIONS,
-    includeGuaranteeComparison: true,
-    includeFhssConcept: true,
-    activeDepositScenario: "baseline-20",
-  });
-  const helpToBuy = preview.schemeStatuses.find((status) => status.id === "help-to-buy");
-  const guarantee = preview.schemeStatuses.find((status) => status.id === "guarantee");
-
-  return {
-    ...DEFAULT_HOMEOWNER_PATHWAY_SELECTIONS,
-    includeGuaranteeComparison: true,
-    includeFhssConcept: true,
-    activeDepositScenario:
-      helpToBuy?.state === "available" || helpToBuy?.state === "active"
-        ? "shared-equity-2"
-        : guarantee?.state === "available" || guarantee?.state === "active"
-          ? "guarantee-5"
-          : "baseline-20",
-    expandedPathway: "deposit",
-  };
 }
 
 function getInitialDisplay(): DisplayDraft {
@@ -541,7 +517,7 @@ export function FirstHomeQuizFlow() {
     () => dutyIntake.visibleTier2Fields.map((fieldId) => TIER2_QUESTION_BY_FIELD[fieldId]),
     [dutyIntake.visibleTier2Fields],
   );
-  const previewSelections = useMemo(() => buildDefaultSelections(input), [input]);
+  const previewSelections = useMemo(() => buildDefaultHomeownerPathwaySelections(input), [input]);
   const preview = useMemo(() => buildHomeownerPathwayOutput(input, previewSelections), [input, previewSelections]);
   const canContinueTier1 = tier1Page.questions.every((question) => isTier1QuestionAnswered(question, tier1Answers, display));
   const canContinueTier2 = tier2Questions.every((question) => isTier2QuestionAnswered(question, input, display));
@@ -658,33 +634,42 @@ export function FirstHomeQuizFlow() {
 
   async function completeQuiz() {
     setIsCompleting(true);
-    const dashboardSelections = buildDefaultSelections(input);
-    const snapshot: HomeownerDashboardSnapshot = {
-      input,
-      selections: dashboardSelections,
-      incomeFrequency: "annually",
-      expenseFrequency: "monthly",
-      sentAt: new Date().toISOString(),
-    };
+    const dashboardSelections = buildDefaultHomeownerPathwaySelections(input);
+    const snapshot = createHomeownerDashboardSnapshot(input, dashboardSelections);
 
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
-        window.localStorage.removeItem(QUIZ_STORAGE_KEY);
-      }
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
+      window.localStorage.removeItem(QUIZ_STORAGE_KEY);
+    }
 
-      await trackResearchEvent({
+    await Promise.allSettled([
+      fetch("/api/quiz/first-home", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          anonymousId: getAnonymousId(),
+          sessionId: getSessionId(),
+          stage: activeStage,
+          input,
+          tier1Answers,
+          display,
+        }),
+      }).then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to persist first-home quiz submission.");
+        }
+      }),
+      trackResearchEvent({
         surface: "quiz",
         eventName: "quiz_completed",
         properties: {
           homeState: input.homeState ?? "unknown",
           targetPropertyPrice: input.targetPropertyPrice,
         },
-      });
-    } catch {
-      setIsCompleting(false);
-      return;
-    }
+      }),
+    ]);
 
     router.push("/first-home-dashboard");
   }

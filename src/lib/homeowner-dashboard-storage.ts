@@ -10,3 +10,17 @@ export type HomeownerDashboardSnapshot = {
   expenseFrequency: Frequency;
   sentAt: string;
 };
+
+export function createHomeownerDashboardSnapshot(
+  input: HomeownerPathwayInput,
+  selections: HomeownerPathwaySelections,
+  sentAt = new Date().toISOString(),
+): HomeownerDashboardSnapshot {
+  return {
+    input,
+    selections,
+    incomeFrequency: "annually",
+    expenseFrequency: "monthly",
+    sentAt,
+  };
+}

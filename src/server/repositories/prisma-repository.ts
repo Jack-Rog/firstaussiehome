@@ -230,26 +230,63 @@ export class PrismaRepository {
     return this.listBookmarks(input.userId);
   }
 
+  async listQuizSubmissions(input?: {
+    quizType?: QuizSubmissionRecord["quizType"];
+    limit?: number;
+  }) {
+    const entries = await this.prisma.quizSubmission.findMany({
+      where: input?.quizType ? { quizType: input.quizType } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: input?.limit,
+    });
+    return entries.map((entry) => ({
+      ...entry,
+      userId: entry.userId,
+      anonymousId: entry.anonymousId,
+      sessionId: entry.sessionId,
+      answers: entry.answers as Record<string, unknown>,
+      result: entry.result as Record<string, unknown>,
+      quizType: entry.quizType as QuizSubmissionRecord["quizType"],
+      createdAt: entry.createdAt.toISOString(),
+    }));
+  }
+
   async saveQuizSubmission(input: {
-    userId: string;
+    userId?: string | null;
+    anonymousId?: string | null;
+    sessionId?: string | null;
     quizType: QuizSubmissionRecord["quizType"];
     answers: Record<string, unknown>;
     result: Record<string, unknown>;
   }) {
     const entry = await this.prisma.quizSubmission.create({
       data: {
-        ...input,
+        userId: input.userId ?? null,
+        anonymousId: input.anonymousId ?? null,
+        sessionId: input.sessionId ?? null,
+        quizType: input.quizType,
         answers: this.toJson(input.answers),
         result: this.toJson(input.result),
       },
     });
     return {
       ...entry,
+      userId: entry.userId,
+      anonymousId: entry.anonymousId,
+      sessionId: entry.sessionId,
       answers: entry.answers as Record<string, unknown>,
       result: entry.result as Record<string, unknown>,
       quizType: entry.quizType as QuizSubmissionRecord["quizType"],
       createdAt: entry.createdAt.toISOString(),
     };
+  }
+
+  async listResearchSubmissions(input?: { limit?: number }) {
+    const entries = await this.prisma.researchSubmission.findMany({
+      orderBy: { createdAt: "desc" },
+      take: input?.limit,
+    });
+    return entries.map((entry) => this.mapResearchSubmission(entry));
   }
 
   async saveResearchSubmission(input: {
@@ -273,6 +310,22 @@ export class PrismaRepository {
       },
     });
     return this.mapResearchSubmission(entry);
+  }
+
+  async listResearchEvents(input?: {
+    limit?: number;
+    surface?: ResearchEventRecord["surface"];
+    eventName?: ResearchEventName;
+  }) {
+    const entries = await this.prisma.researchEvent.findMany({
+      where: {
+        surface: input?.surface,
+        eventName: input?.eventName,
+      },
+      orderBy: { createdAt: "desc" },
+      take: input?.limit,
+    });
+    return entries.map((entry) => this.mapResearchEvent(entry));
   }
 
   async saveResearchEvent(input: {
