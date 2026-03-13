@@ -34,9 +34,6 @@ export function SiteShell({ children }: { children: ReactNode }) {
               <Link href="/learn" className="hover:text-primary">
                 Learn
               </Link>
-              <Link href="/eoi/tools" className="hover:text-primary">
-                Tools + Support Research
-              </Link>
             </div>
           </div>
 

@@ -1,6 +1,10 @@
+import { AdminPasswordGate } from "@/components/admin/admin-password-gate";
+import { AdminSessionControls } from "@/components/admin/admin-session-controls";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
-import { requireAdminUser } from "@/src/lib/route-guards";
+import { hasAdminPasswordConfigured } from "@/src/lib/admin";
+import { getStoredFirstHomeQuizQuestionResponses } from "@/src/lib/first-home-quiz";
+import { getAdminAccessState } from "@/src/lib/route-guards";
 import type { QuizSubmissionRecord, ResearchEventRecord, ResearchSubmissionRecord } from "@/src/lib/types";
 import { formatCurrency } from "@/src/lib/utils";
 import { getRepository } from "@/src/server/repositories/repository";
@@ -48,6 +52,26 @@ function titleCase(value: string) {
     .join(" ");
 }
 
+function formatCapturedUser(input: {
+  userName?: string | null;
+  userEmail?: string | null;
+  userId?: string | null;
+}) {
+  if (input.userName && input.userEmail) {
+    return `${input.userName} (${input.userEmail})`;
+  }
+
+  if (input.userEmail) {
+    return input.userEmail;
+  }
+
+  if (input.userName) {
+    return input.userName;
+  }
+
+  return input.userId ?? "Anonymous";
+}
+
 function MetricCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <Card className="space-y-2 bg-[linear-gradient(180deg,#ffffff,#f6f7f3)]">
@@ -62,7 +86,7 @@ function SurveySubmissionCard({ submission }: { submission: ResearchSubmissionRe
   const response = asRecord(submission.response);
   const result = asRecord(submission.result);
   const tags = asStringArray(result.tags);
-  const interviewEmail = asString(response.interviewEmail);
+  const followUpEmail = submission.userEmail ?? null;
 
   return (
     <article className="rounded-[1.15rem] border border-border bg-white p-5 shadow-[0_10px_22px_rgba(33,47,37,0.06)]">
@@ -88,7 +112,12 @@ function SurveySubmissionCard({ submission }: { submission: ResearchSubmissionRe
           {asBoolean(response.interviewOptIn) ? "Yes" : "No"}
         </p>
         <p>
-          <span className="font-semibold text-foreground">Follow-up email:</span> {interviewEmail ?? "Not supplied"}
+          <span className="font-semibold text-foreground">Account:</span>{" "}
+          {formatCapturedUser(submission)}
+        </p>
+        <p>
+          <span className="font-semibold text-foreground">Follow-up email:</span>{" "}
+          {asBoolean(response.interviewOptIn) ? followUpEmail ?? "Account email unavailable" : "No follow-up requested"}
         </p>
       </div>
 
@@ -126,6 +155,10 @@ function FirstHomeQuizCard({ submission }: { submission: QuizSubmissionRecord })
   const result = asRecord(submission.result);
   const dashboardSnapshot = asRecord(result.dashboardSnapshot);
   const selections = asRecord(dashboardSnapshot.selections);
+  const questionResponses = getStoredFirstHomeQuizQuestionResponses({
+    answers: submission.answers,
+    result: submission.result,
+  });
 
   return (
     <article className="rounded-[1.15rem] border border-border bg-white p-5 shadow-[0_10px_22px_rgba(33,47,37,0.06)]">
@@ -153,13 +186,36 @@ function FirstHomeQuizCard({ submission }: { submission: QuizSubmissionRecord })
           {titleCase(asString(selections.activeDepositScenario) ?? "baseline-20")}
         </p>
         <p>
-          <span className="font-semibold text-foreground">User:</span> {submission.userId ?? "Anonymous"}
+          <span className="font-semibold text-foreground">Account:</span> {formatCapturedUser(submission)}
         </p>
         <p>
           <span className="font-semibold text-foreground">Anonymous/session:</span>{" "}
           {(submission.anonymousId ?? "N/A").slice(0, 8)} / {(submission.sessionId ?? "N/A").slice(0, 8)}
         </p>
       </div>
+
+      <details className="mt-4 rounded-[1rem] border border-border bg-[#f8f8f5] p-4">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground">
+          <span>Captured question answers</span>
+          <Badge className="bg-white text-foreground-soft">{questionResponses.length} saved</Badge>
+        </summary>
+
+        <div className="mt-4 grid gap-3">
+          {questionResponses.length === 0 ? (
+            <p className="text-sm text-foreground-soft">No question-level answers were captured for this submission.</p>
+          ) : (
+            questionResponses.map((response) => (
+              <div key={response.id} className="rounded-[0.9rem] border border-border bg-white p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-strong">
+                  {response.stage}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{response.prompt}</p>
+                <p className="mt-1 text-sm leading-6 text-foreground-soft">{response.answer}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </details>
     </article>
   );
 }
@@ -194,7 +250,17 @@ function EventSummary({ events }: { events: ResearchEventRecord[] }) {
 }
 
 export default async function AdminResearchPage() {
-  const adminUser = await requireAdminUser("/admin/research");
+  const adminAccess = await getAdminAccessState();
+  const passwordConfigured = hasAdminPasswordConfigured();
+
+  if (!adminAccess.authorized) {
+    return (
+      <div className="mx-auto flex min-h-[70vh] max-w-4xl items-center px-6 py-10">
+        <AdminPasswordGate passwordConfigured={passwordConfigured} />
+      </div>
+    );
+  }
+
   const repository = getRepository();
   const [submissions, quizSubmissions, events] = await Promise.all([
     repository.listResearchSubmissions({ limit: 50 }),
@@ -208,7 +274,7 @@ export default async function AdminResearchPage() {
   const interviewQualified = submissions.filter((submission) =>
     asBoolean(asRecord(submission.result).interviewQualified),
   ).length;
-  const quizCompleted = events.filter((event) => event.eventName === "quiz_completed").length;
+  const quizCompleted = quizSubmissions.length;
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-10">
@@ -218,7 +284,14 @@ export default async function AdminResearchPage() {
         <p className="max-w-3xl text-lg text-foreground-soft">
           Review survey responses, public quiz submissions, and recent telemetry in one place.
         </p>
-        <p className="text-sm text-foreground-soft">Signed in as {adminUser.email ?? adminUser.id}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-sm text-foreground-soft">
+            {adminAccess.method === "email"
+              ? `Signed in as ${adminAccess.user?.email ?? adminAccess.user?.id}`
+              : "Unlocked with the admin password"}
+          </p>
+          <AdminSessionControls canLock={adminAccess.method === "password"} />
+        </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -240,7 +313,7 @@ export default async function AdminResearchPage() {
         <MetricCard
           label="Quiz completions"
           value={String(quizCompleted)}
-          note="Recent quiz completion events captured across visitors."
+          note="Recent persisted public quiz submissions linked to the public first-home flow."
         />
       </section>
 

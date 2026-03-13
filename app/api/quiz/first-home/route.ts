@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildDefaultHomeownerPathwaySelections } from "@/src/lib/analysis/homeowner-pathway-defaults";
 import { deriveDutyIntakeState } from "@/src/lib/analysis/homeowner-duty-intake";
+import {
+  buildFirstHomeQuizQuestionResponses,
+  sanitizeStoredFirstHomeQuizDisplay,
+  sanitizeStoredFirstHomeQuizInput,
+} from "@/src/lib/first-home-quiz";
 import { buildHomeownerPathwayOutput } from "@/src/lib/analysis/homeowner-pathway-analysis";
 import { createHomeownerDashboardSnapshot } from "@/src/lib/homeowner-dashboard-storage";
 import { getCurrentUser } from "@/src/lib/route-guards";
@@ -37,6 +42,19 @@ export async function POST(request: Request) {
   const preview = buildHomeownerPathwayOutput(input, selections);
   const dutyIntake = deriveDutyIntakeState(input);
   const dashboardSnapshot = createHomeownerDashboardSnapshot(input, selections);
+  const questionResponses = buildFirstHomeQuizQuestionResponses({
+    input,
+    tier1Answers: body.tier1Answers,
+    display: body.display,
+    visibleTier2Fields: dutyIntake.visibleTier2Fields,
+  });
+  const storedInput = sanitizeStoredFirstHomeQuizInput({
+    input,
+    tier1Answers: body.tier1Answers,
+    display: body.display,
+    visibleTier2Fields: dutyIntake.visibleTier2Fields,
+  });
+  const storedDisplay = sanitizeStoredFirstHomeQuizDisplay(body.display);
 
   const submission = await getRepository().saveQuizSubmission({
     userId: user?.id ?? null,
@@ -45,13 +63,17 @@ export async function POST(request: Request) {
     quizType: "first-home",
     answers: {
       stage: body.stage,
-      input,
+      input: storedInput,
       tier1Answers: body.tier1Answers,
-      display: body.display,
+      display: storedDisplay,
+      questionResponses,
     },
     result: {
       dutyIntake,
-      dashboardSnapshot,
+      dashboardSnapshot: {
+        ...dashboardSnapshot,
+        input: storedInput,
+      },
       preview,
     },
   });

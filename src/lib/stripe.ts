@@ -61,7 +61,7 @@ export async function createCheckoutSession(input: { userId: string; email?: str
       },
     ],
     success_url: `${getAppUrl()}/model?checkout=success`,
-    cancel_url: `${getAppUrl()}/eoi/tools?checkout=cancelled`,
+    cancel_url: `${getAppUrl()}/first-home-dashboard?checkout=cancelled`,
     client_reference_id: input.userId,
     customer_email: input.email ?? undefined,
     metadata: {
@@ -76,7 +76,7 @@ export async function createCheckoutSession(input: { userId: string; email?: str
 
   return {
     demo: false,
-    url: session.url ?? `${getAppUrl()}/eoi/tools`,
+    url: session.url ?? `${getAppUrl()}/first-home-dashboard`,
   };
 }
 

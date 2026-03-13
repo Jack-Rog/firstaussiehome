@@ -12,10 +12,10 @@ export function PaywallCard({ paymentsDemo }: { paymentsDemo: boolean }) {
       </CardText>
       {paymentsDemo ? <p className="text-sm font-semibold text-primary-strong">Payments are disabled in dev</p> : null}
       <Link
-        href="/eoi/tools"
+        href="/first-home-dashboard"
         className="inline-flex w-fit items-center rounded-full bg-primary px-5 py-3 font-semibold text-white"
       >
-        Open Tools + Support Research
+        Return to dashboard
       </Link>
     </Card>
   );

@@ -30,6 +30,7 @@ Aussies First Home is a Next.js MVP for Australian graduates who want a guided w
 - `EMAIL_FROM`
 - `RESEND_API_KEY`
 - `ADMIN_EMAILS`
+- `ADMIN_PASSWORD`
 - `RESEARCH_ALERT_TO`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
@@ -63,8 +64,10 @@ npm run dev
 3. Run `npm run prisma:generate`.
 4. Run `npm run prisma:migrate` when you need to apply the checked-in Prisma migrations to a new environment.
 5. Add real Auth and Stripe credentials.
-6. Set `ADMIN_EMAILS` to the signed-in inboxes allowed to open `/admin/research`.
-7. Set `RESEARCH_ALERT_TO` if survey alerts should go to a different inbox than the admin list.
+6. Account access now uses email + password. `EMAIL_FROM` and `RESEND_API_KEY` are used for password reset emails and research alerts, not for login.
+7. Set `ADMIN_EMAILS` to the signed-in inboxes allowed to open `/admin/research` if you want email-based admin access.
+8. Set `ADMIN_PASSWORD` if you want the admin page to unlock with a shared password instead of requiring email sign-in.
+9. Set `RESEARCH_ALERT_TO` if survey alerts should go to a different inbox than the admin list. Set it to `off` to disable research alert emails entirely.
 
 ### Supabase project wiring
 
@@ -91,11 +94,11 @@ npm run test:e2e
 4. Visit `/tools/deposit-runway` and confirm the slider changes the timeline.
 5. Visit `/pricing` and confirm the dev message appears when Stripe vars are missing.
 6. Use `/pricing` in demo mode and confirm `/model` unlocks after the local demo checkout path.
-7. In a real integration environment, test Resend magic links, Stripe checkout, and a forwarded Stripe webhook.
-8. Visit `/admin/research` with an allowed admin email and confirm new survey responses and public quiz submissions appear.
+7. In a real integration environment, test account registration, password login, password reset email, Stripe checkout, and a forwarded Stripe webhook.
+8. Visit `/admin/research` and confirm it unlocks with either the admin password or an allowed admin email, then verify new survey responses and public quiz submissions appear.
 
 ## Real integration notes
 
-- Resend magic links: use a verified sender for `EMAIL_FROM`.
+- Password reset emails: use a verified sender for `EMAIL_FROM`.
 - Stripe checkout: set `STRIPE_PRO_PRICE_ID` to the live recurring price ID.
 - Stripe webhook: forward events for `checkout.session.completed`, `customer.subscription.updated`, and `customer.subscription.deleted`.

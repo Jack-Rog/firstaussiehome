@@ -83,7 +83,7 @@ export const REFERENCE_LINKS: Record<ReferenceKey, ReferenceLink> = {
   ASIC_MONEYSMART_SCAMS: {
     key: "ASIC_MONEYSMART_SCAMS",
     label: "MoneySmart scams and investing",
-    href: "https://moneysmart.gov.au/consumer-rights-and-guarantees/scams",
+    href: "https://moneysmart.gov.au/online-safety/protect-yourself-from-scams",
     note: "Scam warning signs and what to do next.",
   },
   AFCA_HOME: {

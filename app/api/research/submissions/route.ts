@@ -52,7 +52,6 @@ const submissionSchema = z
     ),
     confidenceLevel: z.number().int().min(1).max(5),
     interviewOptIn: z.boolean(),
-    interviewEmail: z.string().trim().email().nullable().optional(),
     careerStage: z
       .enum(
         [
@@ -103,15 +102,6 @@ const submissionSchema = z
       .partial()
       .nullable()
       .optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.interviewOptIn && !value.interviewEmail) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["interviewEmail"],
-        message: "Interview email is required when interview opt-in is selected.",
-      });
-    }
   });
 
 export async function POST(request: Request) {
@@ -159,7 +149,6 @@ export async function POST(request: Request) {
       buyTimeline: body.buyTimeline,
       confidenceLevel: body.confidenceLevel,
       interviewOptIn: body.interviewOptIn,
-      interviewEmail: body.interviewEmail ?? null,
       careerStage: body.careerStage ?? null,
       context: body.context ?? null,
     },

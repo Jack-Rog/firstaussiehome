@@ -125,6 +125,10 @@ export class PrismaRepository {
   private mapResearchSubmission(entry: {
     id: string;
     userId: string | null;
+    user?: {
+      email: string | null;
+      name: string | null;
+    } | null;
     anonymousId: string;
     sessionId: string;
     surface: string;
@@ -136,6 +140,8 @@ export class PrismaRepository {
     return {
       id: entry.id,
       userId: entry.userId,
+      userEmail: entry.user?.email ?? null,
+      userName: entry.user?.name ?? null,
       anonymousId: entry.anonymousId,
       sessionId: entry.sessionId,
       surface: entry.surface as ResearchSubmissionSurface,
@@ -149,6 +155,10 @@ export class PrismaRepository {
   private mapResearchEvent(entry: {
     id: string;
     userId: string | null;
+    user?: {
+      email: string | null;
+      name: string | null;
+    } | null;
     anonymousId: string;
     sessionId: string;
     surface: string;
@@ -159,6 +169,8 @@ export class PrismaRepository {
     return {
       id: entry.id,
       userId: entry.userId,
+      userEmail: entry.user?.email ?? null,
+      userName: entry.user?.name ?? null,
       anonymousId: entry.anonymousId,
       sessionId: entry.sessionId,
       surface: entry.surface as ResearchEventRecord["surface"],
@@ -235,6 +247,14 @@ export class PrismaRepository {
     limit?: number;
   }) {
     const entries = await this.prisma.quizSubmission.findMany({
+      include: {
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
       where: input?.quizType ? { quizType: input.quizType } : undefined,
       orderBy: { createdAt: "desc" },
       take: input?.limit,
@@ -242,6 +262,8 @@ export class PrismaRepository {
     return entries.map((entry) => ({
       ...entry,
       userId: entry.userId,
+      userEmail: entry.user?.email ?? null,
+      userName: entry.user?.name ?? null,
       anonymousId: entry.anonymousId,
       sessionId: entry.sessionId,
       answers: entry.answers as Record<string, unknown>,
@@ -260,6 +282,14 @@ export class PrismaRepository {
     result: Record<string, unknown>;
   }) {
     const entry = await this.prisma.quizSubmission.create({
+      include: {
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
       data: {
         userId: input.userId ?? null,
         anonymousId: input.anonymousId ?? null,
@@ -272,6 +302,8 @@ export class PrismaRepository {
     return {
       ...entry,
       userId: entry.userId,
+      userEmail: null,
+      userName: null,
       anonymousId: entry.anonymousId,
       sessionId: entry.sessionId,
       answers: entry.answers as Record<string, unknown>,
@@ -283,6 +315,14 @@ export class PrismaRepository {
 
   async listResearchSubmissions(input?: { limit?: number }) {
     const entries = await this.prisma.researchSubmission.findMany({
+      include: {
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: input?.limit,
     });
@@ -299,6 +339,14 @@ export class PrismaRepository {
     result: Record<string, unknown>;
   }) {
     const entry = await this.prisma.researchSubmission.create({
+      include: {
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
       data: {
         userId: input.userId ?? null,
         anonymousId: input.anonymousId,
@@ -318,6 +366,14 @@ export class PrismaRepository {
     eventName?: ResearchEventName;
   }) {
     const entries = await this.prisma.researchEvent.findMany({
+      include: {
+        user: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+      },
       where: {
         surface: input?.surface,
         eventName: input?.eventName,

@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardText, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   RESEARCH_BUYING_MODE_OPTIONS,
   RESEARCH_BUY_TIMELINE_OPTIONS,
@@ -55,7 +54,6 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
   const [buyTimeline, setBuyTimeline] = useState<ResearchBuyTimeline | "">("");
   const [confidenceLevel, setConfidenceLevel] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [interviewOptIn, setInterviewOptIn] = useState<boolean | null>(null);
-  const [interviewEmail, setInterviewEmail] = useState("");
   const [careerStage, setCareerStage] = useState<ResearchCareerStage | "">("");
   const [stateValue, setStateValue] = useState<ResearchState | "">("");
   const [incomeBand, setIncomeBand] = useState<ResearchIncomeBand | "">("");
@@ -97,9 +95,6 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
   function toggleInterviewOptIn(nextValue: boolean) {
     markStarted();
     setInterviewOptIn(nextValue);
-    if (!nextValue) {
-      setInterviewEmail("");
-    }
   }
 
   function validate() {
@@ -155,10 +150,6 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
       return "Tell us whether you are open to a 10-minute chat.";
     }
 
-    if (interviewOptIn && interviewEmail.trim().length === 0) {
-      return "Enter an email so we can follow up about the interview.";
-    }
-
     return null;
   }
 
@@ -201,7 +192,6 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
           buyTimeline,
           confidenceLevel,
           interviewOptIn,
-          interviewEmail: interviewOptIn ? interviewEmail.trim() : null,
           careerStage: careerStage || null,
           context: submissionContext,
         }),
@@ -245,7 +235,7 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
     return (
       <Card
         data-testid={`research-intake-${surface}-suppressed`}
-        className="animate-fade-up border-primary/20 bg-[linear-gradient(135deg,#f6faf2,#f7f3eb)] p-5"
+        className="animate-fade-up border-[#d4b06a]/40 bg-[linear-gradient(135deg,#fff8dd,#fff1c9)] p-5 shadow-[0_14px_34px_rgba(191,141,36,0.12)]"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="max-w-2xl space-y-2">
@@ -278,7 +268,7 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
 
   if (surface === "dashboard" && isCollapsed) {
     return (
-      <Card className="animate-fade-up border-dashed border-primary/25 bg-white/92 p-5">
+      <Card className="animate-fade-up border-dashed border-[#d4b06a]/50 bg-[linear-gradient(135deg,#fff9e6,#fff3cf)] p-5 shadow-[0_12px_28px_rgba(191,141,36,0.1)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <CardTitle className="text-lg">Share feedback later</CardTitle>
@@ -294,13 +284,15 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
 
   if (isSubmitted) {
     return (
-      <Card className="animate-fade-up border-primary/25 bg-[linear-gradient(135deg,#f4faef,#f7f2ea)]">
+      <Card className="animate-fade-up border-[#d4b06a]/40 bg-[linear-gradient(135deg,#fff8df,#fff0c7)] shadow-[0_14px_34px_rgba(191,141,36,0.12)]">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Thanks</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9a6a0a]">Thanks</p>
           <CardTitle>We have your feedback.</CardTitle>
           <CardText>
             We use these responses to decide what to build next.{" "}
-            {interviewOptIn ? "We may email you about a short 10-minute research chat." : "You can keep exploring the dashboard now."}
+            {interviewOptIn
+              ? "If we follow up about a short 10-minute research chat, we will use the email on your account."
+              : "You can keep exploring the dashboard now."}
           </CardText>
         </div>
       </Card>
@@ -308,18 +300,21 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
   }
 
   return (
-    <Card data-testid={`research-intake-${surface}`} className="animate-fade-up border-primary/20 bg-white/94">
+      <Card
+      data-testid={`research-intake-${surface}`}
+      className="animate-fade-up border-[#d8c39a]/45 bg-[linear-gradient(180deg,#fffdf9,#faf4e8)] shadow-[0_16px_38px_rgba(177,142,82,0.11)]"
+    >
       {surface === "dashboard" ? (
-        <div className="mb-5 rounded-[1.1rem] border border-primary/20 bg-[linear-gradient(135deg,#f3f9ef,#f7f1e8)] p-4 shadow-[0_8px_20px_rgba(33,47,37,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Quick research survey</p>
+        <div className="mb-5 rounded-[1.1rem] border border-[#d8c39a]/45 bg-[linear-gradient(135deg,#f8ecd0,#f2dfb5)] p-4 shadow-[0_12px_28px_rgba(177,142,82,0.14)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b6b2b]">Quick research survey</p>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
             <div className="max-w-2xl space-y-1">
-              <p className="text-lg font-semibold tracking-tight">Tell us what is still blocking you.</p>
-              <p className="text-sm text-foreground-soft">
+              <p className="text-lg font-semibold tracking-tight text-[#4f3f1b]">Tell us what is still blocking you.</p>
+              <p className="text-sm text-[#66563a]">
                 Fill in the short survey below. Early research participants may receive free credits in future rollouts.
               </p>
             </div>
-            <Button type="button" onClick={focusSurvey}>
+            <Button type="button" className="bg-[#8b6b2b] text-white hover:bg-[#755a25]" onClick={focusSurvey}>
               Fill in the survey
             </Button>
           </div>
@@ -327,8 +322,8 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
       ) : null}
 
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">
-          {surface === "dashboard" ? "Help shape what comes next" : "Tools + Support Research"}
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b6b2b]">
+          {surface === "dashboard" ? "Help shape what comes next" : "Research survey"}
         </p>
         <CardTitle>{title}</CardTitle>
         <CardText>{intro}</CardText>
@@ -588,6 +583,11 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
 
         <div className="space-y-2 rounded-xl border border-border bg-[#f8faf6] p-4">
           <p className="text-sm font-semibold">Open to a 10-minute chat about your story and what you are struggling with?</p>
+          <p className="text-xs text-foreground-soft">
+            {surface === "dashboard"
+              ? "If you say yes, we will use the email on your account for any follow-up."
+              : "If you say yes, we will use your signed-in account email for any follow-up."}
+          </p>
           <div className="flex gap-3">
             <Button
               data-testid={`research-${surface}-interview-yes`}
@@ -606,21 +606,6 @@ export function ResearchIntakeForm({ surface, title, intro, context }: ResearchI
               No
             </Button>
           </div>
-          {interviewOptIn ? (
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold">Best email for follow-up</span>
-              <Input
-                data-testid={`research-${surface}-email`}
-                type="email"
-                placeholder="you@example.com"
-                value={interviewEmail}
-                onChange={(event) => {
-                  markStarted();
-                  setInterviewEmail(event.currentTarget.value);
-                }}
-              />
-            </label>
-          ) : null}
         </div>
 
         {error ? <p className="text-sm text-[#8a2f2f]">{error}</p> : null}

@@ -7,6 +7,56 @@ import type { ResearchEventName, ResearchSurface } from "@/src/lib/types";
 
 const ANONYMOUS_ID_KEY = "aussiesfirsthome:anonymous-id";
 const SESSION_ID_KEY = "aussiesfirsthome:research-session-id";
+const EVENT_CACHE_KEY = "aussiesfirsthome:recent-research-events";
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerialize(entry)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function getEventDedupeWindowMs(eventName: ResearchEventName) {
+  if (eventName === "dashboard_viewed" || eventName === "research_module_viewed" || eventName === "eoi_viewed") {
+    return 30_000;
+  }
+
+  if (eventName === "research_started") {
+    return 15_000;
+  }
+
+  return 5_000;
+}
+
+function shouldSkipRecentEvent(signature: string, eventName: ResearchEventName, storage: Storage) {
+  const now = Date.now();
+  const windowMs = getEventDedupeWindowMs(eventName);
+
+  try {
+    const raw = storage.getItem(EVENT_CACHE_KEY);
+    const cache = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    const filteredCache = Object.fromEntries(
+      Object.entries(cache).filter(([, timestamp]) => Number.isFinite(timestamp) && now - timestamp < 60_000),
+    );
+    const previousTimestamp = filteredCache[signature];
+
+    filteredCache[signature] = now;
+    storage.setItem(EVENT_CACHE_KEY, JSON.stringify(filteredCache));
+
+    return typeof previousTimestamp === "number" && now - previousTimestamp < windowMs;
+  } catch {
+    return false;
+  }
+}
 
 function getStorageId(key: string, storage: Storage) {
   const existing = storage.getItem(key);
@@ -41,6 +91,11 @@ export async function trackResearchEvent(input: {
   properties?: Record<string, unknown>;
 }) {
   if (typeof window === "undefined") {
+    return;
+  }
+
+  const eventSignature = stableSerialize([input.surface, input.eventName, input.properties ?? {}]);
+  if (shouldSkipRecentEvent(eventSignature, input.eventName, window.sessionStorage)) {
     return;
   }
 

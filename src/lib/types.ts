@@ -561,6 +561,8 @@ export type BookmarkRecord = {
 export type QuizSubmissionRecord = {
   id: string;
   userId: string | null;
+  userEmail?: string | null;
+  userName?: string | null;
   anonymousId: string | null;
   sessionId: string | null;
   quizType: "first-home" | "onboarding" | "fundamentals" | "schemes";
@@ -624,6 +626,8 @@ export type ResearchContext = {
 export type ResearchSubmissionRecord = {
   id: string;
   userId: string | null;
+  userEmail?: string | null;
+  userName?: string | null;
   anonymousId: string;
   sessionId: string;
   surface: ResearchSubmissionSurface;
@@ -636,6 +640,8 @@ export type ResearchSubmissionRecord = {
 export type ResearchEventRecord = {
   id: string;
   userId: string | null;
+  userEmail?: string | null;
+  userName?: string | null;
   anonymousId: string;
   sessionId: string;
   surface: ResearchSurface;

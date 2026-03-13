@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { hasAdminAccess } from "@/src/lib/admin";
+import {
+  getAdminSessionCookieName,
+  hasAdminAccess,
+  hasValidAdminSessionToken,
+} from "@/src/lib/admin";
 import { auth } from "@/src/lib/auth";
 import { isMemoryMode } from "@/src/lib/demo-mode";
 import { getProDemoCookieName, hasValidProDemoCookie } from "@/src/lib/stripe";
@@ -62,4 +66,33 @@ export async function requireAdminUser(callbackUrl = "/admin/research") {
   }
 
   return user;
+}
+
+export async function getAdminAccessState() {
+  const user = await getCurrentUser();
+
+  if (hasAdminAccess(user)) {
+    return {
+      authorized: true as const,
+      method: "email" as const,
+      user,
+    };
+  }
+
+  const cookieStore = await cookies();
+  const token = cookieStore.get(getAdminSessionCookieName())?.value;
+
+  if (hasValidAdminSessionToken(token)) {
+    return {
+      authorized: true as const,
+      method: "password" as const,
+      user: null,
+    };
+  }
+
+  return {
+    authorized: false as const,
+    method: null,
+    user,
+  };
 }

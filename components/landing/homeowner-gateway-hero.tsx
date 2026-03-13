@@ -277,15 +277,15 @@ export function HomeownerGatewayHero() {
           </p>
         </Link>
         <Link
-          href="/eoi/tools"
+          href="/first-home-dashboard"
           className="rounded-[1.25rem] border border-border bg-white/85 p-6 transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_12px_24px_rgba(33,47,37,0.08)]"
         >
           <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
             <Sparkles className="h-5 w-5" />
           </div>
-          <p className="text-lg font-semibold">Shape future tools and support</p>
+          <p className="text-lg font-semibold">Share feedback from your dashboard</p>
           <p className="mt-2 text-sm text-foreground-soft">
-            Tell us what still feels hard so we can decide what tools or support are actually worth building next.
+            Your feedback survey now lives at the bottom of the dashboard so it stays attached to your account.
           </p>
         </Link>
       </section>

@@ -9,12 +9,12 @@ const TIER_FEATURES = {
     "Factual first-home calculators",
     "Guided learning",
   ],
-  eoi: [
-    "Problem-based research intake",
-    "Manual interview follow-up",
-    "Signals for future tools",
-    "Signals for possible human support",
-    "No feature checklist guesswork",
+  account: [
+    "Account-backed dashboard",
+    "Saved quiz and survey history",
+    "Password recovery by email",
+    "Future modelling tied to your account",
+    "One place to reopen your progress",
   ],
 };
 
@@ -44,26 +44,26 @@ export function PricingGrid({ paymentsDemo }: { paymentsDemo: boolean }) {
           <Zap className="h-3.5 w-3.5" />
           Optional next step
         </div>
-        <CardTitle className="text-white">Tools + Support Research</CardTitle>
+        <CardTitle className="text-white">Account-backed dashboard</CardTitle>
         <CardText className="text-white/85">
-          Tell us what feels hard, what you have already tried, and whether a short follow-up chat would help us learn faster.
+          Create an account once so the quiz, dashboard, and research survey stay linked together when you return.
         </CardText>
-        <p className="text-4xl font-semibold">Research</p>
+        <p className="text-4xl font-semibold">Included</p>
         <ul className="space-y-2 text-sm text-white/85">
-          {TIER_FEATURES.eoi.map((feature) => (
+          {TIER_FEATURES.account.map((feature) => (
             <li key={feature} className="flex items-start gap-2">
               <Check className="mt-0.5 h-4 w-4 text-white" />
               <span>{feature}</span>
             </li>
           ))}
         </ul>
-        <Link href="/eoi/tools" className="w-full rounded-xl bg-white px-5 py-3 text-center text-sm font-semibold text-primary transition hover:bg-white/90">
-          Open tools + support research
+        <Link href="/first-home-dashboard" className="w-full rounded-xl bg-white px-5 py-3 text-center text-sm font-semibold text-primary transition hover:bg-white/90">
+          Open dashboard
         </Link>
         {paymentsDemo ? (
-          <p className="text-xs text-white/80">Payments are disabled in dev. This lane is for research, not checkout.</p>
+          <p className="text-xs text-white/80">Payments are disabled in dev. The core dashboard flow remains available.</p>
         ) : (
-          <p className="text-xs text-white/80">No paid integration currently. This lane exists to identify what is worth building next.</p>
+          <p className="text-xs text-white/80">No paid integration currently. The main value is saving and reopening your account-backed results.</p>
         )}
       </Card>
     </div>

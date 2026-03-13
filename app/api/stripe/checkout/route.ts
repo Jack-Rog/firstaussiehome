@@ -2,6 +2,6 @@ import { NextResponse } from "next/server";
 
 export async function POST() {
   return NextResponse.redirect(
-    new URL("/eoi/tools", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+    new URL("/first-home-dashboard", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   );
 }

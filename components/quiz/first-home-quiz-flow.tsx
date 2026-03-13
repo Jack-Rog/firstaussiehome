@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useDisclosure } from "@/components/compliance/disclosure-context";
@@ -13,6 +13,10 @@ import {
   buildHomeownerPathwayOutput,
   DEFAULT_HOMEOWNER_PATHWAY_INPUT,
 } from "@/src/lib/analysis/homeowner-pathway-analysis";
+import {
+  type FirstHomeQuizPersistedState,
+  PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY,
+} from "@/src/lib/first-home-quiz";
 import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
   createHomeownerDashboardSnapshot,
@@ -389,18 +393,23 @@ function getInitialDisplay(): DisplayDraft {
   };
 }
 
-function getInitialQuizState(): QuizPersistedState {
+function getFallbackQuizState(): QuizPersistedState {
   const baseInput: HomeownerPathwayInput = {
     ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
     livingInNsw: true,
   };
-  const fallback: QuizPersistedState = {
+
+  return {
     stage: "tier1",
     tier1PageIndex: 0,
     input: baseInput,
     tier1Answers: {},
     display: getInitialDisplay(),
   };
+}
+
+function readSavedQuizState(): QuizPersistedState {
+  const fallback = getFallbackQuizState();
 
   if (typeof window === "undefined") {
     return fallback;
@@ -413,7 +422,7 @@ function getInitialQuizState(): QuizPersistedState {
 
   try {
     const saved = JSON.parse(raw) as Partial<QuizPersistedState>;
-    const savedInput = saved.input ?? baseInput;
+    const savedInput = saved.input ?? fallback.input;
     const savedHomeState = savedInput.homeState ?? (savedInput.livingInNsw === false ? "vic" : "nsw");
 
     return {
@@ -500,15 +509,15 @@ function optionButtonClass(active: boolean) {
     : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted";
 }
 
-export function FirstHomeQuizFlow() {
+export function FirstHomeQuizFlow({ isSignedIn }: { isSignedIn: boolean }) {
   const router = useRouter();
   const { setDisclosure } = useDisclosure();
-  const [initialQuizState] = useState(getInitialQuizState);
-  const [stage, setStage] = useState<Stage>(initialQuizState.stage);
-  const [tier1PageIndex, setTier1PageIndex] = useState(initialQuizState.tier1PageIndex);
-  const [input, setInput] = useState<HomeownerPathwayInput>(initialQuizState.input);
-  const [tier1Answers, setTier1Answers] = useState<Tier1AnswerMap>(initialQuizState.tier1Answers);
-  const [display, setDisplay] = useState<DisplayDraft>(initialQuizState.display);
+  const savedStateLoaded = useRef(false);
+  const [stage, setStage] = useState<Stage>("tier1");
+  const [tier1PageIndex, setTier1PageIndex] = useState(0);
+  const [input, setInput] = useState<HomeownerPathwayInput>(() => getFallbackQuizState().input);
+  const [tier1Answers, setTier1Answers] = useState<Tier1AnswerMap>({});
+  const [display, setDisplay] = useState<DisplayDraft>(() => getInitialDisplay());
   const [isCompleting, setIsCompleting] = useState(false);
 
   const tier1Page = TIER1_PAGES[tier1PageIndex] ?? TIER1_PAGES[0];
@@ -524,6 +533,20 @@ export function FirstHomeQuizFlow() {
   const activeStage: Stage = stage === "tier2" && !dutyIntake.needsTier2 ? "tier1" : stage;
   const stageLabels = dutyIntake.needsTier2 ? ["Tier 1", "Tier 2"] : ["Tier 1"];
   const currentStagePosition = activeStage === "tier2" && dutyIntake.needsTier2 ? 1 : 0;
+
+  useEffect(() => {
+    if (savedStateLoaded.current) {
+      return;
+    }
+
+    savedStateLoaded.current = true;
+    const savedState = readSavedQuizState();
+    setStage(savedState.stage);
+    setTier1PageIndex(savedState.tier1PageIndex);
+    setInput(savedState.input);
+    setTier1Answers(savedState.tier1Answers);
+    setDisplay(savedState.display);
+  }, []);
 
   useEffect(() => {
     setDisclosure({
@@ -636,42 +659,62 @@ export function FirstHomeQuizFlow() {
     setIsCompleting(true);
     const dashboardSelections = buildDefaultHomeownerPathwaySelections(input);
     const snapshot = createHomeownerDashboardSnapshot(input, dashboardSelections);
+    const submission: FirstHomeQuizPersistedState = {
+      stage: activeStage,
+      input,
+      tier1Answers,
+      display,
+      capturedAt: new Date().toISOString(),
+    };
 
     if (typeof window !== "undefined") {
       window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
+      window.localStorage.setItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY, JSON.stringify(submission));
       window.localStorage.removeItem(QUIZ_STORAGE_KEY);
     }
 
-    await Promise.allSettled([
-      fetch("/api/quiz/first-home", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          anonymousId: getAnonymousId(),
-          sessionId: getSessionId(),
-          stage: activeStage,
-          input,
-          tier1Answers,
-          display,
-        }),
-      }).then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to persist first-home quiz submission.");
-        }
-      }),
-      trackResearchEvent({
-        surface: "quiz",
-        eventName: "quiz_completed",
-        properties: {
-          homeState: input.homeState ?? "unknown",
-          targetPropertyPrice: input.targetPropertyPrice,
-        },
-      }),
-    ]);
+    const trackingPromise = trackResearchEvent({
+      surface: "quiz",
+      eventName: "quiz_completed",
+      properties: {
+        homeState: input.homeState ?? "unknown",
+        targetPropertyPrice: input.targetPropertyPrice,
+      },
+    });
 
-    router.push("/first-home-dashboard");
+    if (isSignedIn) {
+      await Promise.allSettled([
+        fetch("/api/quiz/first-home", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            anonymousId: getAnonymousId(),
+            sessionId: getSessionId(),
+            stage: activeStage,
+            input,
+            tier1Answers,
+            display,
+          }),
+        }).then((response) => {
+          if (!response.ok) {
+            throw new Error("Failed to persist first-home quiz submission.");
+          }
+
+          if (typeof window !== "undefined") {
+            window.localStorage.removeItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY);
+          }
+        }),
+        trackingPromise,
+      ]);
+
+      router.push("/first-home-dashboard");
+      return;
+    }
+
+    await trackingPromise;
+    router.push("/sign-in?callbackUrl=%2Ffirst-home-dashboard");
   }
 
   return (
@@ -795,7 +838,9 @@ export function FirstHomeQuizFlow() {
               {tier1PageIndex === TIER1_PAGES.length - 1 && !dutyIntake.needsTier2
                 ? isCompleting
                   ? "Saving..."
-                  : "View dashboard"
+                  : isSignedIn
+                    ? "View dashboard"
+                    : "Create account to view dashboard"
                 : "Continue"}
             </Button>
           </div>
@@ -906,7 +951,7 @@ export function FirstHomeQuizFlow() {
               onClick={() => void completeQuiz()}
               disabled={!canContinueTier2 || isCompleting}
             >
-              {isCompleting ? "Saving..." : "View dashboard"}
+              {isCompleting ? "Saving..." : isSignedIn ? "View dashboard" : "Create account to view dashboard"}
               {isCompleting ? null : <ChevronRight className="ml-1 h-4 w-4" />}
             </Button>
           </div>

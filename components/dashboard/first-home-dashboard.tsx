@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -28,10 +28,16 @@ import {
 } from "@/src/lib/analysis/homeowner-pathway-analysis";
 import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
+  HOMEOWNER_DASHBOARD_PROGRESS_KEY,
+  parseHomeownerDashboardSnapshot,
   type HomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
+import {
+  PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY,
+  type FirstHomeQuizPersistedState,
+} from "@/src/lib/first-home-quiz";
 import { deriveResearchContextFromHomeownerInput } from "@/src/lib/research";
-import { trackResearchEvent } from "@/src/lib/research-client";
+import { getAnonymousId, getSessionId, trackResearchEvent } from "@/src/lib/research-client";
 import { REFERENCE_LINKS } from "@/src/lib/references";
 import type { HomeownerPathwayInput, HomeownerPathwaySelections } from "@/src/lib/types";
 import {
@@ -135,7 +141,27 @@ function toDisplayDraft(
   };
 }
 
-function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>) {
+function selectLatestSnapshot(
+  localSnapshot: HomeownerDashboardSnapshot | null,
+  initialSnapshot?: HomeownerDashboardSnapshot | null,
+) {
+  if (!localSnapshot) {
+    return initialSnapshot ?? null;
+  }
+
+  if (!initialSnapshot) {
+    return localSnapshot;
+  }
+
+  return new Date(localSnapshot.sentAt).getTime() >= new Date(initialSnapshot.sentAt).getTime()
+    ? localSnapshot
+    : initialSnapshot;
+}
+
+function getInitialDashboardState(
+  initialInput?: Partial<HomeownerPathwayInput>,
+  initialSnapshot?: HomeownerDashboardSnapshot | null,
+) {
   const baseHomeState = resolveHomeState(initialInput);
   const baseInput = {
     ...DEFAULT_HOMEOWNER_PATHWAY_INPUT,
@@ -151,54 +177,64 @@ function getInitialDashboardState(initialInput?: Partial<HomeownerPathwayInput>)
     expandedPathway: "deposit",
   };
 
-  if (typeof window === "undefined" || initialInput) {
-    return {
-      input: baseInput,
-      selections: baseSelections,
-      incomeFrequency: "annually" as Frequency,
-      expenseFrequency: "monthly" as Frequency,
-    };
+  const snapshot = initialSnapshot;
+  const snapshotHomeState = snapshot ? resolveHomeState(snapshot.input) : null;
+
+  return {
+    input:
+      snapshot && snapshotHomeState
+        ? {
+            ...baseInput,
+            ...snapshot.input,
+            homeState: snapshotHomeState,
+            livingInNsw: snapshotHomeState === "nsw",
+          }
+        : baseInput,
+    selections: snapshot ? { ...baseSelections, ...snapshot.selections } : baseSelections,
+    incomeFrequency: snapshot?.incomeFrequency ?? ("annually" as Frequency),
+    expenseFrequency: snapshot?.expenseFrequency ?? ("monthly" as Frequency),
+  };
+}
+
+function readSavedDashboardState(initialSnapshot?: HomeownerDashboardSnapshot | null) {
+  if (typeof window === "undefined") {
+    return null;
   }
 
   const raw = window.localStorage.getItem(HOMEOWNER_DASHBOARD_STORAGE_KEY);
-  if (!raw) {
-    return {
-      input: baseInput,
-      selections: baseSelections,
-      incomeFrequency: "annually" as Frequency,
-      expenseFrequency: "monthly" as Frequency,
-    };
+  let localSnapshot: HomeownerDashboardSnapshot | null = null;
+
+  if (raw) {
+    try {
+      localSnapshot = parseHomeownerDashboardSnapshot(JSON.parse(raw));
+    } catch {
+      window.localStorage.removeItem(HOMEOWNER_DASHBOARD_STORAGE_KEY);
+    }
   }
 
-  try {
-    const saved = JSON.parse(raw) as HomeownerDashboardSnapshot;
-    const savedHomeState = resolveHomeState(saved.input);
-
-    return {
-      input: {
-        ...baseInput,
-        ...saved.input,
-        homeState: savedHomeState,
-        livingInNsw: savedHomeState === "nsw",
-      },
-      selections: {
-        ...baseSelections,
-        ...saved.selections,
-        includeGuaranteeComparison: true,
-        includeFhssConcept: true,
-      },
-      incomeFrequency: saved.incomeFrequency,
-      expenseFrequency: saved.expenseFrequency,
-    };
-  } catch {
-    window.localStorage.removeItem(HOMEOWNER_DASHBOARD_STORAGE_KEY);
-    return {
-      input: baseInput,
-      selections: baseSelections,
-      incomeFrequency: "annually" as Frequency,
-      expenseFrequency: "monthly" as Frequency,
-    };
+  const saved = selectLatestSnapshot(localSnapshot, initialSnapshot);
+  if (!saved) {
+    return null;
   }
+
+  const baseState = getInitialDashboardState(undefined, initialSnapshot);
+  const savedHomeState = resolveHomeState(saved.input);
+  return {
+    input: {
+      ...baseState.input,
+      ...saved.input,
+      homeState: savedHomeState,
+      livingInNsw: savedHomeState === "nsw",
+    },
+    selections: {
+      ...baseState.selections,
+      ...saved.selections,
+      includeGuaranteeComparison: true,
+      includeFhssConcept: true,
+    },
+    incomeFrequency: saved.incomeFrequency,
+    expenseFrequency: saved.expenseFrequency,
+  };
 }
 
 function compactBooleanClass(active: boolean) {
@@ -302,14 +338,15 @@ function SectionCard({
     <Card className="animate-fade-up bg-white p-5 md:p-6">
       <button
         type="button"
-        className="flex w-full items-start justify-between gap-4 text-left"
+        className="flex w-full items-start justify-between gap-4 rounded-[1rem] border border-border bg-[linear-gradient(180deg,#fcfcfa,#f3f4ef)] px-4 py-3 text-left transition hover:border-primary/35 hover:bg-[linear-gradient(180deg,#ffffff,#edf4ec)]"
         onClick={onToggle}
       >
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
           {subtitle ? <p className="text-sm text-foreground-soft">{subtitle}</p> : null}
         </div>
-        <span className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-muted text-foreground">
+        <span className="mt-1 inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground shadow-[0_4px_12px_rgba(33,47,37,0.08)]">
+          <span>{isOpen ? "Collapse" : "Expand"}</span>
           {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </span>
       </button>
@@ -320,10 +357,15 @@ function SectionCard({
 
 export function FirstHomeDashboard({
   initialInput,
+  initialSnapshot,
+  signedInUserId,
 }: {
   initialInput?: Partial<HomeownerPathwayInput>;
+  initialSnapshot?: HomeownerDashboardSnapshot | null;
+  signedInUserId?: string | null;
 }) {
-  const [initialState] = useState(() => getInitialDashboardState(initialInput));
+  const [initialState] = useState(() => getInitialDashboardState(initialInput, initialSnapshot));
+  const savedDashboardStateLoaded = useRef(false);
   const { setDisclosure } = useDisclosure();
   const [input, setInput] = useState<HomeownerPathwayInput>(initialState.input);
   const [selections, setSelections] = useState<HomeownerPathwaySelections>(initialState.selections);
@@ -342,6 +384,22 @@ export function FirstHomeDashboard({
   const [mobileSchemePopupId, setMobileSchemePopupId] = useState<string | null>(null);
   const [setupCostsOpen, setSetupCostsOpen] = useState(false);
   const [bannerCollapsed, setBannerCollapsed] = useState(false);
+  const lastServerSyncedSnapshot = useRef<string | null>(null);
+  const pendingQuizSyncStarted = useRef(false);
+  const currentSnapshot = useMemo(
+    () => ({
+      input,
+      selections: {
+        ...selections,
+        includeGuaranteeComparison: true,
+        includeFhssConcept: true,
+      },
+      incomeFrequency,
+      expenseFrequency,
+      sentAt: new Date().toISOString(),
+    }),
+    [expenseFrequency, incomeFrequency, input, selections],
+  );
 
   const withSchemes = useMemo(
     () =>
@@ -373,6 +431,22 @@ export function FirstHomeDashboard({
   const activeResponseTab: ResponseTab = showAdvancedTab ? responseTab : "basic";
 
   useEffect(() => {
+    if (savedDashboardStateLoaded.current || initialInput) {
+      return;
+    }
+
+    savedDashboardStateLoaded.current = true;
+    const savedState = readSavedDashboardState(initialSnapshot);
+    if (!savedState) {
+      return;
+    }
+
+    setInput(savedState.input);
+    setSelections(savedState.selections);
+    setDisplay(toDisplayDraft(savedState.input));
+  }, [initialInput, initialSnapshot]);
+
+  useEffect(() => {
     setDisclosure({
       sources: withSchemes.sources,
       assumptions: withSchemes.assumptions,
@@ -392,26 +466,92 @@ export function FirstHomeDashboard({
       return;
     }
 
-    const snapshot: HomeownerDashboardSnapshot = {
-      input,
-      selections: {
-        ...selections,
-        includeGuaranteeComparison: true,
-        includeFhssConcept: true,
-      },
-      incomeFrequency,
-      expenseFrequency,
-      sentAt: new Date().toISOString(),
-    };
-
     const timer = window.setTimeout(() => {
-      window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(snapshot));
+      window.localStorage.setItem(HOMEOWNER_DASHBOARD_STORAGE_KEY, JSON.stringify(currentSnapshot));
     }, 150);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [expenseFrequency, incomeFrequency, input, selections]);
+  }, [currentSnapshot]);
+
+  useEffect(() => {
+    if (!signedInUserId || typeof window === "undefined") {
+      return;
+    }
+
+    const serializedSnapshot = JSON.stringify(currentSnapshot);
+    if (lastServerSyncedSnapshot.current === serializedSnapshot) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void fetch("/api/progress", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          kind: "tool",
+          key: HOMEOWNER_DASHBOARD_PROGRESS_KEY,
+          value: currentSnapshot,
+          completed: true,
+        }),
+      }).then((response) => {
+        if (response.ok) {
+          lastServerSyncedSnapshot.current = serializedSnapshot;
+        }
+      });
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [currentSnapshot, signedInUserId]);
+
+  useEffect(() => {
+    if (!signedInUserId || typeof window === "undefined" || pendingQuizSyncStarted.current) {
+      return;
+    }
+
+    const rawPending = window.localStorage.getItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY);
+    if (!rawPending) {
+      return;
+    }
+
+    pendingQuizSyncStarted.current = true;
+
+    let pendingSubmission: FirstHomeQuizPersistedState | null = null;
+    try {
+      pendingSubmission = JSON.parse(rawPending) as FirstHomeQuizPersistedState;
+    } catch {
+      window.localStorage.removeItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY);
+      return;
+    }
+
+    void fetch("/api/quiz/first-home", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        anonymousId: getAnonymousId(),
+        sessionId: getSessionId(),
+        stage: pendingSubmission.stage,
+        input: pendingSubmission.input,
+        tier1Answers: pendingSubmission.tier1Answers,
+        display: pendingSubmission.display,
+      }),
+    }).then((response) => {
+      if (response.ok) {
+        window.localStorage.removeItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY);
+      } else {
+        pendingQuizSyncStarted.current = false;
+      }
+    }).catch(() => {
+      pendingQuizSyncStarted.current = false;
+    });
+  }, [signedInUserId]);
 
   const depositPathway = withSchemes.pathways.find((pathway) => pathway.id === "deposit");
   const upfrontCostsPathway = withSchemes.pathways.find((pathway) => pathway.id === "upfront-costs");
@@ -606,13 +746,6 @@ export function FirstHomeDashboard({
         </div>
       </section>
 
-      <ResearchIntakeForm
-        surface="dashboard"
-        title="What still feels hardest about buying your first home?"
-        intro="Tell us about a real situation from the last few weeks. We use this to decide what to build next."
-        context={deriveResearchContextFromHomeownerInput(input)}
-      />
-
       <div className="sticky top-[5.1rem] z-30 space-y-2 md:top-[5.4rem] md:space-y-0">
       <div className="rounded-[1.35rem] border border-border bg-white/90 p-2 md:p-2.5 shadow-[0_10px_26px_rgba(33,47,37,0.1)]">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -635,10 +768,11 @@ export function FirstHomeDashboard({
         </div>
         <button
           type="button"
-          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-muted text-foreground"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground shadow-[0_4px_12px_rgba(33,47,37,0.08)] transition hover:border-primary/35 hover:bg-primary-soft"
           onClick={() => setBannerCollapsed((current) => !current)}
           aria-label={bannerCollapsed ? "Expand frozen banner" : "Collapse frozen banner"}
         >
+          <span>{bannerCollapsed ? "Expand" : "Collapse"}</span>
           {bannerCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
       </div>
@@ -796,10 +930,11 @@ export function FirstHomeDashboard({
             <h2 className="text-base font-semibold tracking-tight">Scheme tracker</h2>
             <button
               type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-foreground"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground shadow-[0_4px_12px_rgba(33,47,37,0.08)] transition hover:border-primary/35 hover:bg-primary-soft"
               onClick={() => setSchemePanelOpen((current) => !current)}
               aria-label="Toggle scheme tracker"
             >
+              <span>{schemePanelOpen ? "Collapse" : "Expand"}</span>
               {schemePanelOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
           </div>
@@ -860,7 +995,6 @@ export function FirstHomeDashboard({
       ) : null}
       </div>
       </div>
-
       <div className="order-2">
       <SectionCard
         title="Your responses"
@@ -1443,6 +1577,15 @@ export function FirstHomeDashboard({
           ) : null}
         </div>
       </SectionCard>
+      </div>
+
+      <div className="order-4">
+        <ResearchIntakeForm
+          surface="dashboard"
+          title="What still feels hardest about buying your first home?"
+          intro="Tell us about a real situation from the last few weeks. We use this to decide what to build next."
+          context={deriveResearchContextFromHomeownerInput(input)}
+        />
       </div>
 
       {mobileSchemePopupId ? (

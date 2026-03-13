@@ -26,7 +26,7 @@ export async function sendResearchSubmissionAlert(submission: ResearchSubmission
 
   const response = asRecord(submission.response);
   const result = asRecord(submission.result);
-  const interviewEmail = asString(response.interviewEmail);
+  const followUpEmail = submission.userEmail ?? null;
   const detailBand = asString(result.detailBand) ?? "unknown";
   const problemText = asString(response.problemText) ?? "No problem text supplied.";
   const attemptedSolutions = asString(response.attemptedSolutions) ?? "No attempted solutions supplied.";
@@ -42,7 +42,7 @@ export async function sendResearchSubmissionAlert(submission: ResearchSubmission
       `A new research response was saved on ${submission.createdAt}.`,
       `Surface: ${submission.surface}`,
       `Interview opt-in: ${asBoolean(response.interviewOptIn) ? "Yes" : "No"}`,
-      `Interview email: ${interviewEmail ?? "Not supplied"}`,
+      `Account email: ${followUpEmail ?? "Not available"}`,
       `Detail band: ${detailBand}`,
       "",
       "Problem text:",
@@ -58,7 +58,7 @@ export async function sendResearchSubmissionAlert(submission: ResearchSubmission
         <h2 style="margin-bottom: 12px;">New research response</h2>
         <p><strong>Surface:</strong> ${submission.surface}</p>
         <p><strong>Interview opt-in:</strong> ${asBoolean(response.interviewOptIn) ? "Yes" : "No"}</p>
-        <p><strong>Interview email:</strong> ${interviewEmail ?? "Not supplied"}</p>
+        <p><strong>Account email:</strong> ${followUpEmail ?? "Not available"}</p>
         <p><strong>Detail band:</strong> ${detailBand}</p>
         <p><strong>Problem text:</strong><br />${problemText.replace(/\n/g, "<br />")}</p>
         <p><strong>Attempted solutions:</strong><br />${attemptedSolutions.replace(/\n/g, "<br />")}</p>
