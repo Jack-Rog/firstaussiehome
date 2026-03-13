@@ -9,7 +9,6 @@ import {
 } from "@/src/lib/first-home-quiz";
 import { buildHomeownerPathwayOutput } from "@/src/lib/analysis/homeowner-pathway-analysis";
 import { createHomeownerDashboardSnapshot } from "@/src/lib/homeowner-dashboard-storage";
-import { getCurrentUser } from "@/src/lib/route-guards";
 import type { HomeownerPathwayInput } from "@/src/lib/types";
 import { getRepository } from "@/src/server/repositories/repository";
 
@@ -36,7 +35,6 @@ const firstHomeQuizSubmissionSchema = z.object({
 
 export async function POST(request: Request) {
   const body = firstHomeQuizSubmissionSchema.parse(await request.json());
-  const user = await getCurrentUser();
   const input = body.input as HomeownerPathwayInput;
   const selections = buildDefaultHomeownerPathwaySelections(input);
   const preview = buildHomeownerPathwayOutput(input, selections);
@@ -57,7 +55,7 @@ export async function POST(request: Request) {
   const storedDisplay = sanitizeStoredFirstHomeQuizDisplay(body.display);
 
   const submission = await getRepository().saveQuizSubmission({
-    userId: user?.id ?? null,
+    userId: null,
     anonymousId: body.anonymousId,
     sessionId: body.sessionId,
     quizType: "first-home",

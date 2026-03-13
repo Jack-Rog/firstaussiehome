@@ -509,10 +509,11 @@ function optionButtonClass(active: boolean) {
     : "bg-surface text-foreground ring-1 ring-border hover:bg-surface-muted";
 }
 
-export function FirstHomeQuizFlow({ isSignedIn }: { isSignedIn: boolean }) {
+export function FirstHomeQuizFlow() {
   const router = useRouter();
   const { setDisclosure } = useDisclosure();
   const savedStateLoaded = useRef(false);
+  const quizStartedTracked = useRef(false);
   const [stage, setStage] = useState<Stage>("tier1");
   const [tier1PageIndex, setTier1PageIndex] = useState(0);
   const [input, setInput] = useState<HomeownerPathwayInput>(() => getFallbackQuizState().input);
@@ -546,6 +547,18 @@ export function FirstHomeQuizFlow({ isSignedIn }: { isSignedIn: boolean }) {
     setInput(savedState.input);
     setTier1Answers(savedState.tier1Answers);
     setDisplay(savedState.display);
+  }, []);
+
+  useEffect(() => {
+    if (quizStartedTracked.current) {
+      return;
+    }
+
+    quizStartedTracked.current = true;
+    void trackResearchEvent({
+      surface: "quiz",
+      eventName: "quiz_started",
+    });
   }, []);
 
   useEffect(() => {
@@ -682,39 +695,33 @@ export function FirstHomeQuizFlow({ isSignedIn }: { isSignedIn: boolean }) {
       },
     });
 
-    if (isSignedIn) {
-      await Promise.allSettled([
-        fetch("/api/quiz/first-home", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            anonymousId: getAnonymousId(),
-            sessionId: getSessionId(),
-            stage: activeStage,
-            input,
-            tier1Answers,
-            display,
-          }),
-        }).then((response) => {
-          if (!response.ok) {
-            throw new Error("Failed to persist first-home quiz submission.");
-          }
-
-          if (typeof window !== "undefined") {
-            window.localStorage.removeItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY);
-          }
+    await Promise.allSettled([
+      fetch("/api/quiz/first-home", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          anonymousId: getAnonymousId(),
+          sessionId: getSessionId(),
+          stage: activeStage,
+          input,
+          tier1Answers,
+          display,
         }),
-        trackingPromise,
-      ]);
+      }).then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to persist first-home quiz submission.");
+        }
 
-      router.push("/first-home-dashboard");
-      return;
-    }
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(PENDING_FIRST_HOME_QUIZ_SUBMISSION_KEY);
+        }
+      }),
+      trackingPromise,
+    ]);
 
-    await trackingPromise;
-    router.push("/sign-in?callbackUrl=%2Ffirst-home-dashboard");
+    router.push("/first-home-dashboard");
   }
 
   return (
@@ -838,9 +845,7 @@ export function FirstHomeQuizFlow({ isSignedIn }: { isSignedIn: boolean }) {
               {tier1PageIndex === TIER1_PAGES.length - 1 && !dutyIntake.needsTier2
                 ? isCompleting
                   ? "Saving..."
-                  : isSignedIn
-                    ? "View dashboard"
-                    : "Create account to view dashboard"
+                  : "View dashboard"
                 : "Continue"}
             </Button>
           </div>
@@ -951,7 +956,7 @@ export function FirstHomeQuizFlow({ isSignedIn }: { isSignedIn: boolean }) {
               onClick={() => void completeQuiz()}
               disabled={!canContinueTier2 || isCompleting}
             >
-              {isCompleting ? "Saving..." : isSignedIn ? "View dashboard" : "Create account to view dashboard"}
+              {isCompleting ? "Saving..." : "View dashboard"}
               {isCompleting ? null : <ChevronRight className="ml-1 h-4 w-4" />}
             </Button>
           </div>

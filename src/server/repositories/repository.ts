@@ -34,6 +34,8 @@ export type AppRepository = {
   }): Promise<BookmarkRecord[]>;
   listQuizSubmissions(input?: {
     quizType?: QuizSubmissionRecord["quizType"];
+    anonymousId?: string | null;
+    sessionId?: string | null;
     limit?: number;
   }): Promise<QuizSubmissionRecord[]>;
   saveQuizSubmission(input: {

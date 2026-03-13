@@ -36,7 +36,7 @@ const DEFAULT_DISCLOSURE: DisclosureState = {
     },
   ],
   assumptions: [
-    "Factual education and modelling only.",
+    "Not financial advice - verify eligibility modelling with official sources.",
     "Official criteria and current settings remain the source of truth.",
   ],
   reviewDate: "2026-03-03",

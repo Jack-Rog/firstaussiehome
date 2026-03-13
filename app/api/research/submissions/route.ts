@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { deriveDutyIntakeState } from "@/src/lib/analysis/homeowner-duty-intake";
+import {
+  buildFirstHomeQuizQuestionResponses,
+  getStoredFirstHomeQuizQuestionResponses,
+} from "@/src/lib/first-home-quiz";
 import {
   buildResearchTags,
   countWords,
@@ -7,6 +12,7 @@ import {
   RESEARCH_PROMPT_VERSION,
 } from "@/src/lib/research";
 import type {
+  HomeownerPathwayInput,
   ResearchBuyTimeline,
   ResearchBuyingMode,
   ResearchCareerStage,
@@ -52,6 +58,22 @@ const submissionSchema = z
     ),
     confidenceLevel: z.number().int().min(1).max(5),
     interviewOptIn: z.boolean(),
+    followUpEmail: z.string().trim().email().nullable().optional(),
+    linkedQuizDraft: z
+      .object({
+        stage: z.enum(["tier1", "tier2"]),
+        input: z.record(z.string(), z.unknown()),
+        tier1Answers: z.record(z.string(), z.union([z.boolean(), z.string()])).default({}),
+        display: z.object({
+          targetPropertyPrice: z.string(),
+          actHouseholdIncome: z.string(),
+          currentSavings: z.string(),
+          dependentChildrenCount: z.string(),
+        }),
+        capturedAt: z.string().optional(),
+      })
+      .nullable()
+      .optional(),
     careerStage: z
       .enum(
         [
@@ -106,7 +128,52 @@ const submissionSchema = z
 
 export async function POST(request: Request) {
   const body = submissionSchema.parse(await request.json());
+  if (body.interviewOptIn && !body.followUpEmail) {
+    return NextResponse.json({ error: "Follow-up email is required when interview opt-in is yes." }, { status: 400 });
+  }
+
   const user = await getCurrentUser();
+  const repository = getRepository();
+  const [linkedQuizSubmission] = await repository.listQuizSubmissions({
+    quizType: "first-home",
+    anonymousId: body.anonymousId,
+    sessionId: body.sessionId,
+    limit: 1,
+  });
+  const linkedQuizDraft = body.linkedQuizDraft
+    ? {
+        stage: body.linkedQuizDraft.stage,
+        input: body.linkedQuizDraft.input as HomeownerPathwayInput,
+        tier1Answers: body.linkedQuizDraft.tier1Answers,
+        display: body.linkedQuizDraft.display,
+      }
+    : null;
+  const linkedQuizResult =
+    linkedQuizSubmission
+      ? {
+          source: "submission",
+          submissionId: linkedQuizSubmission.id,
+          quizType: linkedQuizSubmission.quizType,
+          createdAt: linkedQuizSubmission.createdAt,
+          questionResponses: getStoredFirstHomeQuizQuestionResponses({
+            answers: linkedQuizSubmission.answers,
+            result: linkedQuizSubmission.result,
+          }),
+        }
+      : linkedQuizDraft
+        ? {
+            source: "local-draft",
+            submissionId: null,
+            quizType: "first-home",
+            createdAt: body.linkedQuizDraft?.capturedAt ?? new Date().toISOString(),
+            questionResponses: buildFirstHomeQuizQuestionResponses({
+              input: linkedQuizDraft.input,
+              tier1Answers: linkedQuizDraft.tier1Answers,
+              display: linkedQuizDraft.display,
+              visibleTier2Fields: deriveDutyIntakeState(linkedQuizDraft.input).visibleTier2Fields,
+            }),
+          }
+        : null;
   const problemWordCount = countWords(body.problemText);
   const attemptedSolutionsWordCount = countWords(body.attemptedSolutions);
   const detailBand = deriveResearchDetailBand(body.problemText, body.attemptedSolutions);
@@ -132,9 +199,10 @@ export async function POST(request: Request) {
     interviewQualified,
     trackedAt: new Date().toISOString(),
     tags,
+    linkedQuiz: linkedQuizResult,
   };
 
-  const submission = await getRepository().saveResearchSubmission({
+  const submission = await repository.saveResearchSubmission({
     userId: user?.id ?? null,
     anonymousId: body.anonymousId,
     sessionId: body.sessionId,
@@ -149,6 +217,7 @@ export async function POST(request: Request) {
       buyTimeline: body.buyTimeline,
       confidenceLevel: body.confidenceLevel,
       interviewOptIn: body.interviewOptIn,
+      followUpEmail: body.followUpEmail ?? null,
       careerStage: body.careerStage ?? null,
       context: body.context ?? null,
     },

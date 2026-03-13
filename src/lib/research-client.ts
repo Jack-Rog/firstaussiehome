@@ -26,7 +26,12 @@ function stableSerialize(value: unknown): string {
 }
 
 function getEventDedupeWindowMs(eventName: ResearchEventName) {
-  if (eventName === "dashboard_viewed" || eventName === "research_module_viewed" || eventName === "eoi_viewed") {
+  if (
+    eventName === "quiz_started" ||
+    eventName === "dashboard_viewed" ||
+    eventName === "research_module_viewed" ||
+    eventName === "eoi_viewed"
+  ) {
     return 30_000;
   }
 

@@ -607,6 +607,7 @@ export type ResearchState = NonNullable<HomeownerPathwayInput["homeState"]> | "u
 export type ResearchDetailBand = "thin" | "solid" | "rich";
 
 export type ResearchEventName =
+  | "quiz_started"
   | "quiz_completed"
   | "dashboard_viewed"
   | "research_module_viewed"

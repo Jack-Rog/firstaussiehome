@@ -10,6 +10,7 @@ const eventSchema = z.object({
   surface: z.enum(["quiz", "dashboard", "eoi"] satisfies [ResearchSurface, ...ResearchSurface[]]),
   eventName: z.enum(
     [
+      "quiz_started",
       "quiz_completed",
       "dashboard_viewed",
       "research_module_viewed",

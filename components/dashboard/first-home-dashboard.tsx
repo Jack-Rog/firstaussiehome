@@ -28,7 +28,6 @@ import {
 } from "@/src/lib/analysis/homeowner-pathway-analysis";
 import {
   HOMEOWNER_DASHBOARD_STORAGE_KEY,
-  HOMEOWNER_DASHBOARD_PROGRESS_KEY,
   parseHomeownerDashboardSnapshot,
   type HomeownerDashboardSnapshot,
 } from "@/src/lib/homeowner-dashboard-storage";
@@ -358,11 +357,9 @@ function SectionCard({
 export function FirstHomeDashboard({
   initialInput,
   initialSnapshot,
-  signedInUserId,
 }: {
   initialInput?: Partial<HomeownerPathwayInput>;
   initialSnapshot?: HomeownerDashboardSnapshot | null;
-  signedInUserId?: string | null;
 }) {
   const [initialState] = useState(() => getInitialDashboardState(initialInput, initialSnapshot));
   const savedDashboardStateLoaded = useRef(false);
@@ -384,7 +381,6 @@ export function FirstHomeDashboard({
   const [mobileSchemePopupId, setMobileSchemePopupId] = useState<string | null>(null);
   const [setupCostsOpen, setSetupCostsOpen] = useState(false);
   const [bannerCollapsed, setBannerCollapsed] = useState(false);
-  const lastServerSyncedSnapshot = useRef<string | null>(null);
   const pendingQuizSyncStarted = useRef(false);
   const currentSnapshot = useMemo(
     () => ({
@@ -476,41 +472,7 @@ export function FirstHomeDashboard({
   }, [currentSnapshot]);
 
   useEffect(() => {
-    if (!signedInUserId || typeof window === "undefined") {
-      return;
-    }
-
-    const serializedSnapshot = JSON.stringify(currentSnapshot);
-    if (lastServerSyncedSnapshot.current === serializedSnapshot) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      void fetch("/api/progress", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          kind: "tool",
-          key: HOMEOWNER_DASHBOARD_PROGRESS_KEY,
-          value: currentSnapshot,
-          completed: true,
-        }),
-      }).then((response) => {
-        if (response.ok) {
-          lastServerSyncedSnapshot.current = serializedSnapshot;
-        }
-      });
-    }, 300);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [currentSnapshot, signedInUserId]);
-
-  useEffect(() => {
-    if (!signedInUserId || typeof window === "undefined" || pendingQuizSyncStarted.current) {
+    if (typeof window === "undefined" || pendingQuizSyncStarted.current) {
       return;
     }
 
@@ -551,7 +513,7 @@ export function FirstHomeDashboard({
     }).catch(() => {
       pendingQuizSyncStarted.current = false;
     });
-  }, [signedInUserId]);
+  }, []);
 
   const depositPathway = withSchemes.pathways.find((pathway) => pathway.id === "deposit");
   const upfrontCostsPathway = withSchemes.pathways.find((pathway) => pathway.id === "upfront-costs");
@@ -736,6 +698,20 @@ export function FirstHomeDashboard({
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">Your results are ready</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">Your first-home dashboard</h1>
         <p className="mt-2 text-sm text-foreground-soft">Each change below updates the out-of-pocket cash straight away.</p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1rem] border border-[#d7c497]/55 bg-[linear-gradient(135deg,rgba(250,242,219,0.96),rgba(244,230,188,0.9))] px-4 py-3 text-sm text-[#5c4722] shadow-[0_10px_26px_rgba(177,142,82,0.12)]">
+          <p className="max-w-3xl">
+            If this dashboard is useful and you want more tools like it, fill out the short survey at the bottom so we can prioritise what to build next.
+          </p>
+          <button
+            type="button"
+            className="inline-flex items-center rounded-full bg-[#7d611f] px-4 py-2 font-semibold text-white transition hover:bg-[#674f19]"
+            onClick={() => {
+              document.getElementById("dashboard-survey")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          >
+            Fill in survey
+          </button>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="inline-flex rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-foreground">
             State: {input.homeState?.toUpperCase()}

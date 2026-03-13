@@ -244,6 +244,8 @@ export class PrismaRepository {
 
   async listQuizSubmissions(input?: {
     quizType?: QuizSubmissionRecord["quizType"];
+    anonymousId?: string | null;
+    sessionId?: string | null;
     limit?: number;
   }) {
     const entries = await this.prisma.quizSubmission.findMany({
@@ -255,7 +257,11 @@ export class PrismaRepository {
           },
         },
       },
-      where: input?.quizType ? { quizType: input.quizType } : undefined,
+      where: {
+        quizType: input?.quizType,
+        anonymousId: input?.anonymousId ?? undefined,
+        sessionId: input?.sessionId ?? undefined,
+      },
       orderBy: { createdAt: "desc" },
       take: input?.limit,
     });

@@ -23,7 +23,7 @@ export function StickyDisclosureRail({
     <>
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-white/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs sm:px-6">
-          <p className="font-semibold text-primary-strong">Factual education and modelling only</p>
+          <p className="font-semibold text-primary-strong">Not financial advice - verify eligibility modelling with official sources</p>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"

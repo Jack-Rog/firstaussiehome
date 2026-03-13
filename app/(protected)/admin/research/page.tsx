@@ -1,12 +1,9 @@
 import { AdminPasswordGate } from "@/components/admin/admin-password-gate";
 import { AdminSessionControls } from "@/components/admin/admin-session-controls";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardText, CardTitle } from "@/components/ui/card";
 import { hasAdminPasswordConfigured } from "@/src/lib/admin";
-import { getStoredFirstHomeQuizQuestionResponses } from "@/src/lib/first-home-quiz";
+import { getStoredFirstHomeQuizQuestionResponses, type FirstHomeQuizQuestionResponse } from "@/src/lib/first-home-quiz";
 import { getAdminAccessState } from "@/src/lib/route-guards";
 import type { QuizSubmissionRecord, ResearchEventRecord, ResearchSubmissionRecord } from "@/src/lib/types";
-import { formatCurrency } from "@/src/lib/utils";
 import { getRepository } from "@/src/server/repositories/repository";
 
 export const dynamic = "force-dynamic";
@@ -27,22 +24,11 @@ function asNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function asStringArray(value: unknown) {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-    : [];
-}
-
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en-AU", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatMaybeCurrency(value: unknown) {
-  const amount = asNumber(value);
-  return amount === null ? "N/A" : formatCurrency(amount);
 }
 
 function titleCase(value: string) {
@@ -52,200 +38,157 @@ function titleCase(value: string) {
     .join(" ");
 }
 
-function formatCapturedUser(input: {
-  userName?: string | null;
-  userEmail?: string | null;
-  userId?: string | null;
-}) {
-  if (input.userName && input.userEmail) {
-    return `${input.userName} (${input.userEmail})`;
+function getSessionKey(input: { id: string; anonymousId?: string | null; sessionId?: string | null }) {
+  return input.sessionId || input.anonymousId || input.id;
+}
+
+function countUniqueSessions<T extends { id: string; anonymousId?: string | null; sessionId?: string | null }>(entries: T[]) {
+  return new Set(entries.map((entry) => getSessionKey(entry))).size;
+}
+
+function formatPercent(numerator: number, denominator: number) {
+  if (denominator <= 0) {
+    return "0%";
   }
 
-  if (input.userEmail) {
-    return input.userEmail;
+  return `${Math.round((numerator / denominator) * 100)}%`;
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return "0.0";
   }
 
-  if (input.userName) {
-    return input.userName;
+  return (values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1);
+}
+
+function buildDistribution(values: Array<string | null | undefined>) {
+  const counts = new Map<string, number>();
+
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (!normalized) {
+      continue;
+    }
+
+    counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
   }
 
-  return input.userId ?? "Anonymous";
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function buildQuestionDistributions(quizSubmissions: QuizSubmissionRecord[]) {
+  const order = new Map<string, number>();
+  const grouped = new Map<
+    string,
+    {
+      id: string;
+      prompt: string;
+      stage: string;
+      total: number;
+      answers: Map<string, number>;
+    }
+  >();
+
+  for (const submission of quizSubmissions) {
+    const questionResponses = getStoredFirstHomeQuizQuestionResponses({
+      answers: submission.answers,
+      result: submission.result,
+    });
+
+    for (const response of questionResponses) {
+      if (!order.has(response.id)) {
+        order.set(response.id, order.size);
+      }
+
+      const existing =
+        grouped.get(response.id) ??
+        {
+          id: response.id,
+          prompt: response.prompt,
+          stage: response.stage,
+          total: 0,
+          answers: new Map<string, number>(),
+        };
+
+      existing.total += 1;
+      existing.answers.set(response.answer, (existing.answers.get(response.answer) ?? 0) + 1);
+      grouped.set(response.id, existing);
+    }
+  }
+
+  return [...grouped.values()]
+    .sort((left, right) => (order.get(left.id) ?? 0) - (order.get(right.id) ?? 0))
+    .map((question) => ({
+      ...question,
+      answers: [...question.answers.entries()]
+        .map(([label, count]) => ({
+          label,
+          count,
+          share: formatPercent(count, question.total),
+        }))
+        .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label)),
+    }));
+}
+
+function findQuestionAnswer(questionResponses: FirstHomeQuizQuestionResponse[], id: string) {
+  return questionResponses.find((response) => response.id === id)?.answer ?? "N/A";
 }
 
 function MetricCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <Card className="space-y-2 bg-[linear-gradient(180deg,#ffffff,#f6f7f3)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-strong">{label}</p>
-      <p className="text-3xl font-semibold tracking-tight">{value}</p>
-      <CardText>{note}</CardText>
-    </Card>
+    <div className="rounded-lg border border-border bg-white p-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground-soft">{label}</div>
+      <div className="mt-2 text-3xl font-semibold text-foreground">{value}</div>
+      <p className="mt-2 text-sm text-foreground-soft">{note}</p>
+    </div>
   );
 }
 
-function SurveySubmissionCard({ submission }: { submission: ResearchSubmissionRecord }) {
-  const response = asRecord(submission.response);
-  const result = asRecord(submission.result);
-  const tags = asStringArray(result.tags);
-  const followUpEmail = submission.userEmail ?? null;
-
+function DistributionTable({
+  title,
+  subtitle,
+  entries,
+}: {
+  title: string;
+  subtitle: string;
+  entries: Array<{ label: string; count: number }>;
+}) {
   return (
-    <article className="rounded-[1.15rem] border border-border bg-white p-5 shadow-[0_10px_22px_rgba(33,47,37,0.06)]">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge>{submission.surface}</Badge>
-        <Badge className="bg-[#eef4ea] text-foreground-soft">{formatTimestamp(submission.createdAt)}</Badge>
-        {asBoolean(result.interviewQualified) ? (
-          <Badge className="bg-[#e8f6ea] text-[#29623a]">Interview Qualified</Badge>
-        ) : null}
+    <section className="rounded-lg border border-border bg-white p-4">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        <p className="text-sm text-foreground-soft">{subtitle}</p>
       </div>
-
-      <div className="mt-4 grid gap-2 text-sm text-foreground-soft md:grid-cols-2">
-        <p>
-          <span className="font-semibold text-foreground">Category:</span>{" "}
-          {titleCase(asString(response.category) ?? "unknown")}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Detail band:</span>{" "}
-          {titleCase(asString(result.detailBand) ?? "unknown")}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Interview opt-in:</span>{" "}
-          {asBoolean(response.interviewOptIn) ? "Yes" : "No"}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Account:</span>{" "}
-          {formatCapturedUser(submission)}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Follow-up email:</span>{" "}
-          {asBoolean(response.interviewOptIn) ? followUpEmail ?? "Account email unavailable" : "No follow-up requested"}
-        </p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-foreground-soft">
+              <th className="px-2 py-2 font-medium">Value</th>
+              <th className="px-2 py-2 font-medium">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.length === 0 ? (
+              <tr>
+                <td className="px-2 py-3 text-foreground-soft" colSpan={2}>
+                  No data yet.
+                </td>
+              </tr>
+            ) : (
+              entries.map((entry) => (
+                <tr key={entry.label} className="border-b border-border/70 last:border-b-0">
+                  <td className="px-2 py-3">{entry.label}</td>
+                  <td className="px-2 py-3 font-semibold">{entry.count}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
-
-      <div className="mt-4 space-y-3">
-        <div>
-          <p className="text-sm font-semibold text-foreground">Problem</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-foreground-soft">
-            {asString(response.problemText) ?? "No response supplied."}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground">Already tried</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm leading-7 text-foreground-soft">
-            {asString(response.attemptedSolutions) ?? "No response supplied."}
-          </p>
-        </div>
-      </div>
-
-      {tags.length > 0 ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <Badge key={tag} className="bg-[#f3f4ef] text-foreground-soft">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-function FirstHomeQuizCard({ submission }: { submission: QuizSubmissionRecord }) {
-  const answers = asRecord(submission.answers);
-  const input = asRecord(answers.input);
-  const result = asRecord(submission.result);
-  const dashboardSnapshot = asRecord(result.dashboardSnapshot);
-  const selections = asRecord(dashboardSnapshot.selections);
-  const questionResponses = getStoredFirstHomeQuizQuestionResponses({
-    answers: submission.answers,
-    result: submission.result,
-  });
-
-  return (
-    <article className="rounded-[1.15rem] border border-border bg-white p-5 shadow-[0_10px_22px_rgba(33,47,37,0.06)]">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge>first-home</Badge>
-        <Badge className="bg-[#eef4ea] text-foreground-soft">{formatTimestamp(submission.createdAt)}</Badge>
-        <Badge className="bg-[#f3f4ef] text-foreground-soft">{titleCase(asString(answers.stage) ?? "tier1")}</Badge>
-      </div>
-
-      <div className="mt-4 grid gap-2 text-sm text-foreground-soft md:grid-cols-2">
-        <p>
-          <span className="font-semibold text-foreground">State:</span>{" "}
-          {(asString(input.homeState) ?? "unknown").toUpperCase()}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Target price:</span>{" "}
-          {formatMaybeCurrency(input.targetPropertyPrice)}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Current savings:</span>{" "}
-          {formatMaybeCurrency(input.currentSavings)}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Active scenario:</span>{" "}
-          {titleCase(asString(selections.activeDepositScenario) ?? "baseline-20")}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Account:</span> {formatCapturedUser(submission)}
-        </p>
-        <p>
-          <span className="font-semibold text-foreground">Anonymous/session:</span>{" "}
-          {(submission.anonymousId ?? "N/A").slice(0, 8)} / {(submission.sessionId ?? "N/A").slice(0, 8)}
-        </p>
-      </div>
-
-      <details className="mt-4 rounded-[1rem] border border-border bg-[#f8f8f5] p-4">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-foreground">
-          <span>Captured question answers</span>
-          <Badge className="bg-white text-foreground-soft">{questionResponses.length} saved</Badge>
-        </summary>
-
-        <div className="mt-4 grid gap-3">
-          {questionResponses.length === 0 ? (
-            <p className="text-sm text-foreground-soft">No question-level answers were captured for this submission.</p>
-          ) : (
-            questionResponses.map((response) => (
-              <div key={response.id} className="rounded-[0.9rem] border border-border bg-white p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary-strong">
-                  {response.stage}
-                </p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{response.prompt}</p>
-                <p className="mt-1 text-sm leading-6 text-foreground-soft">{response.answer}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </details>
-    </article>
-  );
-}
-
-function EventSummary({ events }: { events: ResearchEventRecord[] }) {
-  const counts = events.reduce<Record<string, number>>((accumulator, event) => {
-    accumulator[event.eventName] = (accumulator[event.eventName] ?? 0) + 1;
-    return accumulator;
-  }, {});
-
-  const orderedEntries = Object.entries(counts).sort((left, right) => right[1] - left[1]);
-
-  return (
-    <Card className="space-y-4">
-      <div className="space-y-2">
-        <CardTitle>Recent event mix</CardTitle>
-        <CardText>Event telemetry captured from recent quiz, dashboard, and research interactions.</CardText>
-      </div>
-      {orderedEntries.length === 0 ? (
-        <CardText>No events recorded yet.</CardText>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {orderedEntries.map(([eventName, count]) => (
-            <Badge key={eventName} className="bg-[#f3f4ef] text-foreground">
-              {eventName}: {count}
-            </Badge>
-          ))}
-        </div>
-      )}
-    </Card>
+    </section>
   );
 }
 
@@ -262,100 +205,259 @@ export default async function AdminResearchPage() {
   }
 
   const repository = getRepository();
-  const [submissions, quizSubmissions, events] = await Promise.all([
-    repository.listResearchSubmissions({ limit: 50 }),
-    repository.listQuizSubmissions({ quizType: "first-home", limit: 50 }),
-    repository.listResearchEvents({ limit: 200 }),
+  const [surveySubmissions, quizSubmissions, events] = await Promise.all([
+    repository.listResearchSubmissions({ limit: 250 }),
+    repository.listQuizSubmissions({ quizType: "first-home", limit: 250 }),
+    repository.listResearchEvents({ limit: 1000 }),
   ]);
 
-  const interviewOptIns = submissions.filter((submission) =>
+  const dashboardSurveySubmissions = surveySubmissions.filter((submission) => submission.surface === "dashboard");
+  const quizStartEvents = events.filter((event) => event.eventName === "quiz_started");
+  const quizCompletionEvents = events.filter((event) => event.eventName === "quiz_completed");
+  const dashboardViewEvents = events.filter((event) => event.eventName === "dashboard_viewed");
+  const dashboardResearchStartEvents = events.filter(
+    (event) => event.surface === "dashboard" && event.eventName === "research_started",
+  );
+
+  const uniqueQuizStarts = countUniqueSessions(quizStartEvents);
+  const uniqueQuizCompletions = countUniqueSessions(quizCompletionEvents);
+  const uniqueDashboardViews = countUniqueSessions(dashboardViewEvents);
+  const uniqueSurveyStarts = countUniqueSessions(dashboardResearchStartEvents);
+  const uniqueSurveySubmissions = countUniqueSessions(dashboardSurveySubmissions);
+
+  const linkedQuizCount = dashboardSurveySubmissions.filter(
+    (submission) => asString(asRecord(asRecord(submission.result).linkedQuiz).submissionId) !== null,
+  ).length;
+  const interviewOptInCount = dashboardSurveySubmissions.filter((submission) =>
     asBoolean(asRecord(submission.response).interviewOptIn),
   ).length;
-  const interviewQualified = submissions.filter((submission) =>
+  const followUpEmailsCollected = dashboardSurveySubmissions.filter((submission) =>
+    asString(asRecord(submission.response).followUpEmail),
+  ).length;
+  const qualifiedResearchCount = dashboardSurveySubmissions.filter((submission) =>
     asBoolean(asRecord(submission.result).interviewQualified),
   ).length;
-  const quizCompleted = quizSubmissions.length;
+  const slowdownValues = dashboardSurveySubmissions
+    .map((submission) => asNumber(asRecord(submission.response).slowdownLevel))
+    .filter((value): value is number => value !== null);
+  const confidenceValues = dashboardSurveySubmissions
+    .map((submission) => asNumber(asRecord(submission.response).confidenceLevel))
+    .filter((value): value is number => value !== null);
+
+  const questionDistributions = buildQuestionDistributions(quizSubmissions);
+  const blockerCategoryDistribution = buildDistribution(
+    dashboardSurveySubmissions.map((submission) => {
+      const category = asString(asRecord(submission.response).category);
+      return category ? titleCase(category) : null;
+    }),
+  );
+  const timeStuckDistribution = buildDistribution(
+    dashboardSurveySubmissions.map((submission) => {
+      const value = asString(asRecord(submission.response).timeStuck);
+      return value ? titleCase(value) : null;
+    }),
+  );
+  const buyTimelineDistribution = buildDistribution(
+    dashboardSurveySubmissions.map((submission) => {
+      const value = asString(asRecord(submission.response).buyTimeline);
+      return value ? titleCase(value) : null;
+    }),
+  );
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 py-10">
-      <section className="space-y-3">
-        <Badge>Admin</Badge>
-        <h1 className="text-4xl font-semibold tracking-tight">Research and quiz responses</h1>
-        <p className="max-w-3xl text-lg text-foreground-soft">
-          Review survey responses, public quiz submissions, and recent telemetry in one place.
+    <div className="mx-auto flex max-w-[1800px] flex-col gap-6 px-6 py-8">
+      <section className="space-y-2">
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground-soft">Admin / research</div>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Quiz analytics and survey responses</h1>
+        <p className="text-sm text-foreground-soft">
+          {adminAccess.method === "email"
+            ? `Signed in as ${adminAccess.user?.email ?? adminAccess.user?.id}`
+            : "Unlocked with the admin password"}
         </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-sm text-foreground-soft">
-            {adminAccess.method === "email"
-              ? `Signed in as ${adminAccess.user?.email ?? adminAccess.user?.id}`
-              : "Unlocked with the admin password"}
-          </p>
-          <AdminSessionControls canLock={adminAccess.method === "password"} />
-        </div>
+        <AdminSessionControls canLock={adminAccess.method === "password"} />
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Survey responses"
-          value={String(submissions.length)}
-          note="Recent saved responses from the dashboard and EOI surfaces."
+          label="Quiz start rate"
+          value={`${uniqueQuizStarts}`}
+          note={`${uniqueQuizCompletions} completions, ${formatPercent(uniqueQuizCompletions, uniqueQuizStarts)} completion rate`}
         />
         <MetricCard
-          label="Interview opt-ins"
-          value={String(interviewOptIns)}
-          note="People who asked to be contacted for a short follow-up chat."
+          label="Dashboard engagement"
+          value={`${uniqueDashboardViews}`}
+          note={`${formatPercent(uniqueDashboardViews, uniqueQuizCompletions)} of completers reached the dashboard`}
         />
         <MetricCard
-          label="Qualified chats"
-          value={String(interviewQualified)}
-          note="Responses with enough detail to count as interview qualified."
+          label="Survey conversion"
+          value={`${uniqueSurveySubmissions}`}
+          note={`${formatPercent(uniqueSurveySubmissions, uniqueQuizCompletions)} of quiz completers submitted the dashboard survey`}
         />
         <MetricCard
-          label="Quiz completions"
-          value={String(quizCompleted)}
-          note="Recent persisted public quiz submissions linked to the public first-home flow."
+          label="Interview leads"
+          value={`${interviewOptInCount}`}
+          note={`${followUpEmailsCollected} emails captured, ${qualifiedResearchCount} qualified responses`}
         />
       </section>
 
-      <EventSummary events={events} />
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Survey starts"
+          value={`${uniqueSurveyStarts}`}
+          note={`${formatPercent(uniqueSurveySubmissions, uniqueSurveyStarts)} submit rate once the form is started`}
+        />
+        <MetricCard
+          label="Linked quiz rows"
+          value={`${linkedQuizCount}`}
+          note={`${formatPercent(linkedQuizCount, dashboardSurveySubmissions.length)} of dashboard surveys have a linked quiz payload`}
+        />
+        <MetricCard
+          label="Average slowdown"
+          value={average(slowdownValues)}
+          note="Mean self-reported friction score from dashboard surveys"
+        />
+        <MetricCard
+          label="Average confidence"
+          value={average(confidenceValues)}
+          note="Mean self-reported confidence score from dashboard surveys"
+        />
+      </section>
 
-      <section className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="space-y-5">
-          <div className="space-y-2">
-            <CardTitle>Recent survey submissions</CardTitle>
-            <CardText>
-              Stored in Supabase as `ResearchSubmission` records. Follow-up emails are included when a respondent opted
-              in.
-            </CardText>
-          </div>
-          <div className="grid gap-4">
-            {submissions.length === 0 ? (
-              <CardText>No survey submissions yet.</CardText>
-            ) : (
-              submissions.map((submission) => (
-                <SurveySubmissionCard key={submission.id} submission={submission} />
-              ))
-            )}
-          </div>
-        </Card>
+      <section className="grid gap-4 xl:grid-cols-3">
+        <DistributionTable
+          title="Top blocker categories"
+          subtitle="What users say they are struggling with most often"
+          entries={blockerCategoryDistribution}
+        />
+        <DistributionTable
+          title="How long people have been stuck"
+          subtitle="Useful for validating urgency and depth of pain"
+          entries={timeStuckDistribution}
+        />
+        <DistributionTable
+          title="Buying timeline distribution"
+          subtitle="Shows whether the current audience is near-term or exploratory"
+          entries={buyTimelineDistribution}
+        />
+      </section>
 
-        <Card className="space-y-5">
-          <div className="space-y-2">
-            <CardTitle>Recent first-home quiz submissions</CardTitle>
-            <CardText>
-              These are the public `/First-Home-Quiz` completions now being persisted to Supabase for later review.
-            </CardText>
-          </div>
-          <div className="grid gap-4">
-            {quizSubmissions.length === 0 ? (
-              <CardText>No public quiz submissions yet.</CardText>
-            ) : (
-              quizSubmissions.map((submission) => (
-                <FirstHomeQuizCard key={submission.id} submission={submission} />
-              ))
-            )}
-          </div>
-        </Card>
+      <section className="rounded-lg border border-border bg-white p-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground">Quiz answer distributions</h2>
+          <p className="text-sm text-foreground-soft">
+            Counts below come from persisted `/First-Home-Quiz` submissions and show how each question is being answered.
+          </p>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          {questionDistributions.length === 0 ? (
+            <p className="text-sm text-foreground-soft">No quiz submissions yet.</p>
+          ) : (
+            questionDistributions.map((question) => (
+              <div key={question.id} className="rounded-lg border border-border bg-[#fbfbf9] p-4">
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground-soft">
+                    {question.stage}
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground">{question.prompt}</h3>
+                  <p className="text-sm text-foreground-soft">{question.total} captured answers</p>
+                </div>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-foreground-soft">
+                        <th className="px-2 py-2 font-medium">Answer</th>
+                        <th className="px-2 py-2 font-medium">Count</th>
+                        <th className="px-2 py-2 font-medium">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {question.answers.map((answer) => (
+                        <tr key={`${question.id}-${answer.label}`} className="border-b border-border/70 last:border-b-0">
+                          <td className="px-2 py-3">{answer.label}</td>
+                          <td className="px-2 py-3 font-semibold">{answer.count}</td>
+                          <td className="px-2 py-3">{answer.share}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-white p-4">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground">Survey response table</h2>
+          <p className="text-sm text-foreground-soft">
+            One row per dashboard survey response. Scroll sideways to review the linked quiz context, opt-in email, and
+            response detail together.
+          </p>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-[1900px] text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-foreground-soft">
+                <th className="px-2 py-2 font-medium">Submitted</th>
+                <th className="px-2 py-2 font-medium">Opt in</th>
+                <th className="px-2 py-2 font-medium">Follow-up email</th>
+                <th className="px-2 py-2 font-medium">Category</th>
+                <th className="px-2 py-2 font-medium">Time stuck</th>
+                <th className="px-2 py-2 font-medium">Timeline</th>
+                <th className="px-2 py-2 font-medium">Slowdown</th>
+                <th className="px-2 py-2 font-medium">Confidence</th>
+                <th className="px-2 py-2 font-medium">Detail band</th>
+                <th className="px-2 py-2 font-medium">Linked quiz</th>
+                <th className="px-2 py-2 font-medium">Linked state</th>
+                <th className="px-2 py-2 font-medium">Linked target price</th>
+                <th className="px-2 py-2 font-medium">Linked savings</th>
+                <th className="px-2 py-2 font-medium">Problem</th>
+                <th className="px-2 py-2 font-medium">Already tried</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboardSurveySubmissions.length === 0 ? (
+                <tr>
+                  <td className="px-2 py-3 text-foreground-soft" colSpan={15}>
+                    No dashboard survey responses yet.
+                  </td>
+                </tr>
+              ) : (
+                dashboardSurveySubmissions.map((submission) => {
+                  const response = asRecord(submission.response);
+                  const result = asRecord(submission.result);
+                  const linkedQuiz = asRecord(result.linkedQuiz);
+                  const questionResponses = Array.isArray(linkedQuiz.questionResponses)
+                    ? (linkedQuiz.questionResponses as FirstHomeQuizQuestionResponse[])
+                    : [];
+
+                  return (
+                    <tr key={submission.id} className="border-b border-border/70 align-top last:border-b-0">
+                      <td className="px-2 py-3">{formatTimestamp(submission.createdAt)}</td>
+                      <td className="px-2 py-3">{asBoolean(response.interviewOptIn) ? "Yes" : "No"}</td>
+                      <td className="px-2 py-3">{asString(response.followUpEmail) ?? "N/A"}</td>
+                      <td className="px-2 py-3">{titleCase(asString(response.category) ?? "unknown")}</td>
+                      <td className="px-2 py-3">{titleCase(asString(response.timeStuck) ?? "unknown")}</td>
+                      <td className="px-2 py-3">{titleCase(asString(response.buyTimeline) ?? "unknown")}</td>
+                      <td className="px-2 py-3">{asNumber(response.slowdownLevel) ?? "N/A"}</td>
+                      <td className="px-2 py-3">{asNumber(response.confidenceLevel) ?? "N/A"}</td>
+                      <td className="px-2 py-3">{titleCase(asString(result.detailBand) ?? "unknown")}</td>
+                      <td className="px-2 py-3">{asString(linkedQuiz.submissionId) ?? "Missing"}</td>
+                      <td className="px-2 py-3">{findQuestionAnswer(questionResponses, "homeState")}</td>
+                      <td className="px-2 py-3">{findQuestionAnswer(questionResponses, "targetPropertyPrice")}</td>
+                      <td className="px-2 py-3">{findQuestionAnswer(questionResponses, "currentSavings")}</td>
+                      <td className="max-w-[340px] px-2 py-3 whitespace-pre-wrap">{asString(response.problemText) ?? "N/A"}</td>
+                      <td className="max-w-[340px] px-2 py-3 whitespace-pre-wrap">
+                        {asString(response.attemptedSolutions) ?? "N/A"}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

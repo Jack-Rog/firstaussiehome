@@ -473,7 +473,7 @@ export function buildFirstHomeExplorerOutput(
     categories,
     sources: buildSources(officialKeys),
     assumptions: [
-      "Factual education and modelling only.",
+      "Not financial advice - verify eligibility modelling with official sources.",
       "NSW transfer duty and first-home relief use a source-dated band model reviewed on 3 March 2026.",
       "Monthly net income uses a 76% gross-to-net proxy.",
       "Private debt servicing uses a 5-year comparison term at 8.5%.",

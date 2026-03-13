@@ -954,7 +954,7 @@ export function buildHomeownerPathwayOutput(
     cashOutlayOverlay,
     sources: buildSources(sourceKeys),
     assumptions: [
-      "Factual education and modelling only.",
+      "Not financial advice - verify eligibility modelling with official sources.",
       `Stamp duty calculations use the source-dated rules engine model as at ${STAMP_DUTY_MODEL_DATE}.`,
       ...(stateKey === "act"
         ? [

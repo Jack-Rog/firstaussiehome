@@ -179,9 +179,17 @@ export class MemoryRepository {
     return this.listBookmarks(input.userId);
   }
 
-  async listQuizSubmissions(input?: { quizType?: QuizSubmissionRecord["quizType"]; limit?: number }) {
+  async listQuizSubmissions(input?: {
+    quizType?: QuizSubmissionRecord["quizType"];
+    anonymousId?: string | null;
+    sessionId?: string | null;
+    limit?: number;
+  }) {
     const entries = [...this.store.quizSubmissions].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    const filtered = input?.quizType ? entries.filter((entry) => entry.quizType === input.quizType) : entries;
+    const filtered = entries
+      .filter((entry) => (input?.quizType ? entry.quizType === input.quizType : true))
+      .filter((entry) => (input?.anonymousId ? entry.anonymousId === input.anonymousId : true))
+      .filter((entry) => (input?.sessionId ? entry.sessionId === input.sessionId : true));
     return typeof input?.limit === "number" ? filtered.slice(0, input.limit) : filtered;
   }
 
